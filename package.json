@@ -1,0 +1,19 @@
+{
+  "name": "kikuyu-platform",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "yarn@4.9.1",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,web -c green,cyan \"yarn workspace @kikuyu/backend server\" \"yarn workspace @kikuyu/web dev\"",
+    "server": "yarn workspace @kikuyu/backend server",
+    "dev:web": "yarn workspace @kikuyu/web dev",
+    "build": "yarn workspace @kikuyu/web build",
+    "type-check": "yarn workspace @kikuyu/web type-check"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -1,0 +1,7 @@
+import { NavLink, useLocation } from "@/lib/navigation";
+import { Clapperboard, Compass, Home, MessageCircle, Plus } from "lucide-react";
+const tabs = [{ path: "/feed", icon: Home, label: "Mũciĩ" },{ path: "/trending", icon: Compass, label: "Discover" },{ path: "/create", icon: Plus, label: "Create", primary: true },{ path: "/reels", icon: Clapperboard, label: "Watch" },{ path: "/messages", icon: MessageCircle, label: "Ũhoro" }];
+export default function BottomNav() {
+  const { pathname } = useLocation();
+  return <nav className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-md rounded-[24px] border border-white/50 bg-[#071a15]/95 p-1.5 text-white shadow-[0_18px_60px_rgba(7,26,21,.34)] backdrop-blur-2xl lg:hidden"><div className="grid grid-cols-5 items-end">{tabs.map(({ path, icon: Icon, label, primary }) => { const active = pathname === path || pathname.startsWith(`${path}/`); return <NavLink key={path} to={path} className="group flex flex-col items-center justify-center gap-1 rounded-2xl py-1.5"><span className={`grid place-items-center transition-all ${primary ? "-mt-6 h-12 w-12 rounded-2xl bg-[#e55d3d] text-white shadow-[0_10px_28px_rgba(229,93,61,.45)] group-active:scale-90" : active ? "h-8 w-10 rounded-xl bg-white text-[#071a15]" : "h-8 w-10 text-white/55 group-hover:text-white"}`}><Icon className={primary ? "h-6 w-6" : "h-[19px] w-[19px]"} strokeWidth={active || primary ? 2.5 : 1.8} /></span><span className={`text-[9px] font-bold ${active || primary ? "text-white" : "text-white/40"}`}>{label}</span></NavLink>; })}</div></nav>;
+}
