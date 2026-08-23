@@ -1,5 +1,4 @@
 // src/modules/auth/auth.controller.js
-const { verifyFirebaseToken } = require('../../config/firebase');
 const UserModel = require('../user/user.model');
 const StaffModel = require('../staff/staff.model');
 const { generateTokenPair, verifyRefreshToken } = require('../../utils/tokenUtils');
@@ -9,35 +8,9 @@ const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
 const pool = require('../../config/db');
 
-// Google Login / Firebase Auth
+// Compatibility response while provider-based Google login is disabled.
 const googleLogin = catchAsync(async (req, res) => {
-  const { idToken } = req.body;
-
-  if (!idToken) {
-    throw new AppError('ID token is required', 400);
-  }
-
-  // Verify Firebase token
-  const firebaseUser = await verifyFirebaseToken(idToken);
-
-  // Find or create user in database
-  const user = await UserModel.findOrCreateFromFirebase(firebaseUser);
-
-  // Generate JWT tokens
-  const tokens = generateTokenPair({
-    id: user.id,
-    email: user.email,
-    role: 'user',
-    isStaff: false
-  });
-
-  // Remove sensitive data
-  delete user.firebase_uid;
-
-  ResponseHandler.success(res, {
-    user,
-    tokens
-  }, 'Login successful');
+  throw new AppError('Google login is not enabled', 501);
 });
 
 // Staff Login (email + password)

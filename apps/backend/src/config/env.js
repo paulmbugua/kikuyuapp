@@ -1,16 +1,19 @@
 // src/config/env.js
+const path = require('path');
 const dotenv = require('dotenv');
 
 // Load environment variables
-dotenv.config();
+const backendEnvPath = path.resolve(__dirname, '../../.env');
+const envResult = dotenv.config({ path: backendEnvPath, override: true });
+
+if (envResult.error) {
+  throw new Error('Failed to load backend environment file at ' + backendEnvPath + ': ' + envResult.error.message);
+}
 
 // Required environment variables
 const requiredEnvVars = [
-  'DB_URL',
+  'DATABASE_URL',
   'JWT_SECRET',
-  'FIREBASE_PROJECT_ID',
-  'FIREBASE_CLIENT_EMAIL',
-  'FIREBASE_PRIVATE_KEY',
   'CLOUDINARY_CLOUD_NAME',
   'CLOUDINARY_API_KEY',
   'CLOUDINARY_API_SECRET'
@@ -25,7 +28,7 @@ requiredEnvVars.forEach(envVar => {
 
 // Parse CORS origins
 const parseCorsOrigin = () => {
-  const origins = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'];
+  const origins = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:8080'];
   return origins.map(origin => origin.trim());
 };
 
@@ -44,10 +47,10 @@ module.exports = {
   },
   
   database: {
-    url: process.env.DB_URL,
+    url: process.env.DATABASE_URL,
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT) || 5432,
-    name: process.env.DB_NAME || 'rugano_db',
+    name: process.env.DB_NAME || 'kikuyuapp',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD,
     ssl: process.env.DB_SSL === 'true',
@@ -63,12 +66,6 @@ module.exports = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     refreshSecret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d'
-  },
-  
-  firebase: {
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
   },
   
   cloudinary: {
