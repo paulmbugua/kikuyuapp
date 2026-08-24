@@ -9,6 +9,18 @@ if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir, { recursive: true });
 }
 
+const serializeDetail = (detail) => {
+  if (detail instanceof Error) {
+    return {
+      name: detail.name,
+      message: detail.message,
+      code: detail.code,
+      stack: detail.stack
+    };
+  }
+  return detail;
+};
+
 // Simple logger implementation
 const logger = {
   info: (message) => {
@@ -24,12 +36,16 @@ const logger = {
     }
   },
   
-  error: (message) => {
+  error: (message, ...details) => {
+    const primaryError = message instanceof Error
+      ? message
+      : details.find((detail) => detail instanceof Error);
     const logEntry = {
       level: 'error',
       timestamp: new Date().toISOString(),
-      message: message.message || message,
-      stack: message.stack
+      message: message instanceof Error ? message.message : String(message),
+      ...(primaryError && { error: serializeDetail(primaryError), stack: primaryError.stack }),
+      ...(details.length > 0 && { details: details.map(serializeDetail) })
     };
     console.error(JSON.stringify(logEntry));
     

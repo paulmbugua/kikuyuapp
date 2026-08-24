@@ -96,9 +96,9 @@ module.exports = {
     password: process.env.DB_PASSWORD,
     ssl: process.env.DB_SSL === 'true',
     pool: {
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000
+      max: parseInt(process.env.DB_POOL_MAX) || 20,
+      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT_MS) || 30000,
+      connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT_MS) || 15000
     }
   },
 

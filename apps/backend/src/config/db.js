@@ -9,9 +9,8 @@ const config = require('./env');
 // Create connection pool
 const pool = new Pool({
   connectionString: config.database.url,
-  max: 20, // maximum number of clients in the pool
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  ...config.database.pool,
+  keepAlive: true,
 });
 
 // Test database connection
@@ -20,21 +19,38 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err) => {
-  console.error('❌ Unexpected database error:', err);
-  process.exit(-1);
+  // pg removes failed idle clients from the pool automatically. Keep the
+  // process alive so a temporary local or Railway network interruption can recover.
+  console.error('❌ Unexpected idle database client error:', err);
 });
 
-// Test query to verify connection
-const testConnection = async () => {
-  try {
-    const client = await pool.connect();
-    const result = await client.query('SELECT NOW() as current_time');
-    console.log(`✅ Database time: ${result.rows[0].current_time}`);
-    client.release();
-  } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
-    process.exit(1);
+const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+// Verify startup connectivity with bounded retries. PostgreSQL can be healthy
+// while taking a few seconds to accept a new connection after startup/resume.
+const testConnection = async (maxAttempts = 5) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let client;
+    try {
+      client = await pool.connect();
+      const result = await client.query('SELECT NOW() as current_time');
+      console.log(`✅ Database time: ${result.rows[0].current_time}`);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxAttempts) {
+        const retryDelay = Math.min(1000 * attempt, 5000);
+        console.warn(`⚠️ Database connection attempt ${attempt}/${maxAttempts} failed: ${error.message}. Retrying in ${retryDelay}ms...`);
+        await delay(retryDelay);
+      }
+    } finally {
+      client?.release();
+    }
   }
+
+  throw new Error(`Database connection failed after ${maxAttempts} attempts: ${lastError?.message || 'unknown error'}`, { cause: lastError });
 };
 
 // Export pool and helper functions

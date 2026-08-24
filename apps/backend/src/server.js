@@ -10,8 +10,6 @@ const logger = require('./utils/logger');
 
 let server;
 
-setupDailyJobs();
-// Start server
 const startServer = async () => {
   try {
     // Test database connection
