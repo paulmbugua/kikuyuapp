@@ -57,7 +57,8 @@ const getCurrentUser = catchAsync(async (req, res) => {
 
 // Get user profile - FIXED with proper UUID casting in subqueries
 const getUserProfile = catchAsync(async (req, res) => {
-  const { username } = req.params;
+  const username = decodeURIComponent(req.params.username || "").replace(/^@+/, "").trim();
+  if (!username) throw new AppError("Username is required", 400);
   const currentUserId = req.user?.id;
 
   const userResult = await pool.query(
@@ -75,7 +76,7 @@ const getUserProfile = catchAsync(async (req, res) => {
       (SELECT COUNT(*) FROM follows WHERE follower_id = u.id AND status = 'accepted') as following_count,
       (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND is_active = true) as posts_count
      FROM users u
-     WHERE u.username = $1 AND u.is_active = true`,
+     WHERE LOWER(u.username) = LOWER($1) AND u.is_active = true`,
     [username]
   );
 

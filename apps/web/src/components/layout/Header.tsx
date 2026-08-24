@@ -1,8 +1,13 @@
 import { Link, useLocation } from "@/lib/navigation";
 import { Bell, MessageCircle, Search, Sparkles } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Header() {
   const { pathname } = useLocation();
+  const { user } = useAuth();
+  const avatarFallback = `https://ui-avatars.com/api/?background=0D9488&color=fff&name=${encodeURIComponent(user?.full_name || user?.username || "User")}&length=2`;
+  const avatarUrl = user?.avatar_url || avatarFallback;
+  const profileLabel = user?.full_name || user?.username || "Your profile";
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-2xl lg:left-[276px]">
       <div className="mx-auto flex h-[68px] w-full max-w-[1380px] items-center gap-3 px-4 lg:px-6">
@@ -12,7 +17,7 @@ export default function Header() {
           <Link to="/trending" className="hidden items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-bold text-foreground shadow-sm transition hover:-translate-y-0.5 sm:flex"><Sparkles className="h-4 w-4 text-[#e55d3d]" />Find your people</Link>
           <Link to="/notifications" aria-label="Notifications" className={`relative grid h-10 w-10 place-items-center rounded-xl transition ${pathname === "/notifications" ? "bg-[#071a15] text-white" : "bg-card text-muted-foreground hover:text-foreground"}`}><Bell className="h-[19px] w-[19px]" /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#e55d3d] ring-2 ring-card" /></Link>
           <Link to="/messages" aria-label="Messages" className={`grid h-10 w-10 place-items-center rounded-xl transition ${pathname === "/messages" ? "bg-[#071a15] text-white" : "bg-card text-muted-foreground hover:text-foreground"}`}><MessageCircle className="h-[19px] w-[19px]" /></Link>
-          <Link to="/profile" className="ml-1"><img src="https://i.pravatar.cc/96?img=47" alt="Your profile" className="h-10 w-10 rounded-xl object-cover ring-2 ring-[#f3c969]/55" /></Link>
+          <Link to="/profile" className="ml-1"><img src={avatarUrl} alt={profileLabel} className="h-10 w-10 rounded-xl object-cover ring-2 ring-[#f3c969]/55" /></Link>
         </div>
       </div>
     </header>

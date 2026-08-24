@@ -37,7 +37,9 @@ export interface UpdateProfileData {
 const userService = {
   // Get user profile by username
   getProfile: async (username: string): Promise<UserProfile> => {
-    const response = await axiosInstance.get(`/users/${username}`);
+    const normalizedUsername = username.trim().replace(/^@+/, '');
+    if (!normalizedUsername || normalizedUsername === 'undefined') throw new Error('A valid username is required');
+    const response = await axiosInstance.get(`/users/${encodeURIComponent(normalizedUsername)}`);
     return response.data.data.profile;
   },
 

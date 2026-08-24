@@ -1,5 +1,6 @@
 import { NavLink, useLocation, useNavigate } from "@/lib/navigation";
 import { Bell, Clapperboard, Compass, Home, LayoutDashboard, LogOut, MessageCircle, Plus, Settings, UserRound, Wallet } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { path: "/feed", icon: Home, label: "Mũciĩ", helper: "Your circle" },
@@ -14,6 +15,11 @@ const navItems = [
 export default function DesktopSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const avatarFallback = `https://ui-avatars.com/api/?background=0D9488&color=fff&name=${encodeURIComponent(user?.full_name || user?.username || "User")}&length=2`;
+  const avatarUrl = user?.avatar_url || avatarFallback;
+  const displayName = user?.full_name || user?.username || "Your profile";
+  const username = user?.username ? `@${user.username}` : "@member";
   return (
     <aside className="fixed inset-y-0 left-0 z-50 hidden w-[276px] flex-col border-r border-white/8 bg-[#071a15] text-white lg:flex">
       <div className="px-6 pb-4 pt-6">
@@ -40,8 +46,8 @@ export default function DesktopSidebar() {
       <div className="p-4">
         <button onClick={() => navigate("/create")} className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#e55d3d] px-4 py-3.5 text-sm font-extrabold text-white shadow-[0_12px_30px_rgba(229,93,61,.25)] transition hover:-translate-y-0.5 hover:bg-[#f06a49]"><Plus className="h-5 w-5" />Share a story</button>
         <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/5 p-2">
-          <NavLink to="/profile" className="flex min-w-0 items-center gap-2"><img src="https://i.pravatar.cc/96?img=47" alt="" className="h-9 w-9 rounded-xl object-cover" /><span className="min-w-0"><span className="block truncate text-xs font-bold">Wanjikũ</span><span className="block truncate text-[10px] text-white/40">@mũrata</span></span></NavLink>
-          <button onClick={() => navigate("/login")} aria-label="Log out" className="rounded-xl p-2 text-white/35 hover:bg-white/10 hover:text-white"><LogOut className="h-4 w-4" /></button>
+          <NavLink to="/profile" className="flex min-w-0 items-center gap-2"><img src={avatarUrl} alt={displayName} className="h-9 w-9 rounded-xl object-cover" /><span className="min-w-0"><span className="block truncate text-xs font-bold">{displayName}</span><span className="block truncate text-[10px] text-white/40">{username}</span></span></NavLink>
+          <button onClick={logout} aria-label="Log out" className="rounded-xl p-2 text-white/35 hover:bg-white/10 hover:text-white"><LogOut className="h-4 w-4" /></button>
         </div>
         <div className="mt-2 flex justify-center gap-1 text-white/25"><NavLink to="/settings" aria-label="Settings" className="p-2 hover:text-white"><Settings className="h-4 w-4" /></NavLink><NavLink to="/profile" aria-label="Profile" className="p-2 hover:text-white"><UserRound className="h-4 w-4" /></NavLink></div>
       </div>

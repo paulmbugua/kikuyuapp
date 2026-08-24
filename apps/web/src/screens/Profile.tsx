@@ -78,15 +78,13 @@ const Profile = () => {
     try {
       let profileData;
       
-      if (username) {
-        profileData = await userService.getProfile(username);
+      const requestedUsername = username?.trim().replace(/^@+/, '');
+      if (requestedUsername && requestedUsername !== 'undefined') {
+        profileData = await userService.getProfile(requestedUsername);
         console.log('Profile data from API:', profileData);
       } else {
-        profileData = currentUser;
-        if (!profileData) {
-          await fetchUser();
-          profileData = useUserStore.getState().user;
-        }
+        await fetchUser();
+        profileData = useUserStore.getState().user || currentUser;
       }
       
       if (profileData) {

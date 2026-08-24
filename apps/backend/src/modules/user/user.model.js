@@ -3,7 +3,7 @@ const pool = require('../../config/db');
 
 class UserModel {
   static async findOrCreateFromGoogle(googleUser) {
-    const { sub, email, name, picture, pictureKey, emailVerified } = googleUser;
+    const { sub, email, name, emailVerified } = googleUser;
     const existingResult = await pool.query(
       'SELECT * FROM users WHERE google_sub = $1 OR LOWER(email) = LOWER($2) LIMIT 1',
       [sub, email]
@@ -18,14 +18,14 @@ class UserModel {
         `UPDATE users
          SET google_sub = $1,
              full_name = COALESCE($2, full_name),
-             avatar_url = COALESCE($3, avatar_url),
-             avatar_key = COALESCE($4, avatar_key),
-             is_verified = is_verified OR $5,
+             avatar_url = CASE WHEN avatar_key LIKE 'users/google-avatars/%' THEN NULL ELSE avatar_url END,
+             avatar_key = CASE WHEN avatar_key LIKE 'users/google-avatars/%' THEN NULL ELSE avatar_key END,
+             is_verified = is_verified OR $3,
              last_login = CURRENT_TIMESTAMP,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $6
+         WHERE id = $4
          RETURNING *`,
-        [sub, name, picture, pictureKey, emailVerified, existing.id]
+        [sub, name, emailVerified, existing.id]
       );
       return updated.rows[0];
     }
@@ -39,10 +39,10 @@ class UserModel {
     }
 
     const result = await pool.query(
-      `INSERT INTO users (google_sub, email, username, full_name, avatar_url, avatar_key, is_verified, last_login)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+      `INSERT INTO users (google_sub, email, username, full_name, is_verified, last_login)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
        RETURNING *`,
-      [sub, email, username, name, picture, pictureKey, emailVerified]
+      [sub, email, username, name, emailVerified]
     );
     return result.rows[0];
   }

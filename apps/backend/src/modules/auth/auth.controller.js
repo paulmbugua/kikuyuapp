@@ -9,7 +9,6 @@ const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
 const pool = require('../../config/db');
 const config = require('../../config/env');
-const { mirrorImage } = require('../../config/r2');
 const {
   STATE_COOKIE,
   createState,
@@ -24,56 +23,6 @@ const safeJson = (value) => JSON.stringify(value)
   .replace(/</g, '\\u003c')
   .replace(/>/g, '\\u003e')
   .replace(/&/g, '\\u0026');
-
-const prepareGoogleProfileImage = async (profile) => {
-  if (!profile.picture) return profile;
-  const existing = await UserModel.findByEmail(profile.email);
-  const cloudflareBase = config.r2.publicBaseUrls.images.replace(/\/$/, '');
-  if (existing?.avatar_url?.startsWith(`${cloudflareBase}/`)) {
-    return { ...profile, picture: existing.avatar_url, pictureKey: existing.avatar_key };
-  }
-
-  const mirrored = await mirrorImage(profile.picture, 'users/google-avatars');
-  return { ...profile, picture: mirrored.url, pictureKey: mirrored.publicId };
-};
-const allowedFrontendOrigin = (candidate) => (
-  config.googleOAuth.frontendOrigins.includes(candidate)
-    ? candidate
-    : config.googleOAuth.frontendOrigin
-);
-
-const sendOAuthPopupResponse = (res, payload, requestedFrontendOrigin) => {
-  const frontendOrigin = allowedFrontendOrigin(requestedFrontendOrigin);
-  const nonce = crypto.randomBytes(18).toString('base64');
-  const message = safeJson(payload);
-  const targetOrigin = safeJson(frontendOrigin);
-  const fallbackPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
-  const fallbackUrl = safeJson(`${frontendOrigin}/login#oauth=${fallbackPayload}`);
-
-  res
-    .status(200)
-    .set({
-      'Cache-Control': 'no-store',
-      'Content-Type': 'text/html; charset=utf-8',
-      'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'`,
-      'Cross-Origin-Opener-Policy': 'unsafe-none',
-      'Referrer-Policy': 'no-referrer'
-    })
-    .send(`<!doctype html>
-<html lang="en">
-  <head><meta charset="utf-8"><title>Google sign-in</title></head>
-  <body>
-    <script nonce="${nonce}">
-      if (window.opener) {
-        window.opener.postMessage(${message}, ${targetOrigin});
-        window.close();
-      } else {
-        window.location.replace(${fallbackUrl});
-      }
-    </script>
-  </body>
-</html>`);
-};
 
 const googleLogin = (req, res) => {
   const frontendOrigin = allowedFrontendOrigin(
@@ -107,8 +56,7 @@ const googleCallback = async (req, res) => {
     frontendOrigin = allowedFrontendOrigin(statePayload.frontendOrigin);
 
     const googleProfile = await exchangeCodeForProfile(code);
-    const preparedProfile = await prepareGoogleProfileImage(googleProfile);
-    const user = await UserModel.findOrCreateFromGoogle(preparedProfile);
+    const user = await UserModel.findOrCreateFromGoogle(googleProfile);
     const tokens = generateTokenPair({ id: user.id, email: user.email, role: 'user', isStaff: false });
     delete user.google_sub;
 
