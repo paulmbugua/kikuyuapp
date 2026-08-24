@@ -13,6 +13,11 @@ export type NavigateOptions = {
   state?: unknown;
 };
 
+const normalizePathname = (pathname: string) => {
+  const normalized = pathname.replace(/\/+$/, "");
+  return normalized || "/";
+};
+
 export type LinkProps = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
   to: string;
   replace?: boolean;
@@ -33,8 +38,9 @@ Link.displayName = "Link";
 
 export const NavLink = forwardRef<HTMLAnchorElement, NavLinkProps>(
   ({ to, className, end = false, ...props }, ref) => {
-    const pathname = usePathname() || "/";
-    const active = end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
+    const pathname = normalizePathname(usePathname() || "/");
+    const target = normalizePathname(to);
+    const active = end ? pathname === target : pathname === target || pathname.startsWith(`${target}/`);
     const resolvedClassName =
       typeof className === "function"
         ? className({ isActive: active, isPending: false })
@@ -64,7 +70,7 @@ export function useNavigate() {
 }
 
 export function useLocation() {
-  const pathname = usePathname() || "/";
+  const pathname = normalizePathname(usePathname() || "/");
   const searchParams = useNextSearchParams();
   const query = searchParams.toString();
 
@@ -78,7 +84,7 @@ export function useLocation() {
 }
 
 export function useParams<T extends Record<string, string | undefined> = Record<string, string>>() {
-  const pathname = usePathname() || "/";
+  const pathname = normalizePathname(usePathname() || "/");
   const segments = pathname.split("/").filter(Boolean);
   const params: Record<string, string> = {};
 
