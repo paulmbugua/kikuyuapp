@@ -14,8 +14,10 @@ const getCurrentUser = catchAsync(async (req, res) => {
   const result = await pool.query(
     `SELECT 
       u.id, u.username, u.email, u.full_name, u.bio, 
-      u.avatar_url, 
+      u.avatar_url,
+      u.avatar_key,
       COALESCE(u.cover_url, '') as cover_url,
+      u.cover_key,
       COALESCE(u.is_verified, false) as is_verified,
       COALESCE(u.is_private, false) as is_private,
       COALESCE(u.is_creator, false) as is_creator,
@@ -64,8 +66,10 @@ const getUserProfile = catchAsync(async (req, res) => {
   const userResult = await pool.query(
     `SELECT 
       u.id, u.username, u.email, u.full_name, u.bio, 
-      u.avatar_url, 
+      u.avatar_url,
+      u.avatar_key,
       COALESCE(u.cover_url, '') as cover_url,
+      u.cover_key,
       COALESCE(u.is_verified, false) as is_verified,
       COALESCE(u.is_private, false) as is_private,
       COALESCE(u.is_creator, false) as is_creator,

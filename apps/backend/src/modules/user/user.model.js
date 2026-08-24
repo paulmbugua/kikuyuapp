@@ -59,8 +59,8 @@ class UserModel {
   // Get user by ID
   static async findById(id) {
     const result = await pool.query(
-      `SELECT id, email, username, full_name, bio, avatar_url,
-              cover_url, phone, gender, date_of_birth, country, is_verified,
+      `SELECT id, email, username, full_name, bio, avatar_url, avatar_key,
+              cover_url, cover_key, phone, gender, date_of_birth, country, is_verified,
               is_private, is_active, token_balance, total_earned, total_tips_sent,
               followers_count, following_count, posts_count, last_login, created_at
        FROM users WHERE id = $1`,

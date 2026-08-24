@@ -10,6 +10,8 @@ interface User {
   full_name: string;
   email: string;
   avatar_url: string;
+  avatar_key?: string;
+  cover_key?: string;
   is_verified: boolean;
   wallet_balance?: number;
 }

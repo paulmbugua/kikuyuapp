@@ -1,6 +1,7 @@
 import { NavLink, useLocation, useNavigate } from "@/lib/navigation";
 import { Bell, Clapperboard, Compass, Home, LayoutDashboard, LogOut, MessageCircle, Plus, Settings, UserRound, Wallet } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getMediaUrl } from "@/utils/mediaUrl";
 
 const navItems = [
   { path: "/feed", icon: Home, label: "Mũciĩ", helper: "Your circle" },
@@ -17,7 +18,7 @@ export default function DesktopSidebar() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const avatarFallback = `https://ui-avatars.com/api/?background=0D9488&color=fff&name=${encodeURIComponent(user?.full_name || user?.username || "User")}&length=2`;
-  const avatarUrl = user?.avatar_url || avatarFallback;
+  const avatarUrl = getMediaUrl(user?.avatar_url, user?.avatar_key) || avatarFallback;
   const displayName = user?.full_name || user?.username || "Your profile";
   const username = user?.username ? `@${user.username}` : "@member";
   return (

@@ -8,6 +8,7 @@ import StoryHighlights from '@/components/feed/StoryHighlights';
 import PostCard from '@/components/feed/PostCard';
 import axiosInstance from '@/utils/axiosConfig';
 import { toast } from 'sonner';
+import { getMediaUrl } from '@/utils/mediaUrl';
 
 interface Post {
   id: string;
@@ -305,7 +306,7 @@ const Profile = () => {
 
   const getAvatarUrl = () => {
     if (profile?.avatar_url) {
-      return profile.avatar_url;
+      return getMediaUrl(profile.avatar_url, profile.avatar_key);
     }
     const name = profile?.full_name || profile?.username || 'User';
     return `https://ui-avatars.com/api/?background=0D9488&color=fff&name=${encodeURIComponent(name)}&length=2`;
@@ -342,7 +343,7 @@ const Profile = () => {
       <div className="relative">
         {profile.cover_url ? (
           <img 
-            src={profile.cover_url} 
+            src={getMediaUrl(profile.cover_url, profile.cover_key, 'cover')}
             alt="Cover" 
             className="h-36 w-full object-cover"
           />

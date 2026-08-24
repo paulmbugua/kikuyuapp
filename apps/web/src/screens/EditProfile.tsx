@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from '@/lib/navigation';
 import { ArrowLeft, Camera, X, Loader2, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useUserStore } from '@/stores/userStore';
+import { getMediaUrl } from '@/utils/mediaUrl';
 import { toast } from 'sonner'; // Make sure you have sonner installed: npm install sonner
 
 const EditProfile = () => {
@@ -187,7 +188,7 @@ const EditProfile = () => {
     // Show preview first if uploading
     if (avatarPreview) return avatarPreview;
     // Show existing avatar from user data
-    if (user?.avatar_url && !avatarLoadFailed) return user.avatar_url;
+    if (user?.avatar_url && !avatarLoadFailed) return getMediaUrl(user.avatar_url, user.avatar_key);
     // Fallback to avatar with initials
     const name = fullName || username || 'User';
     return `https://ui-avatars.com/api/?background=0D9488&color=fff&name=${encodeURIComponent(name)}&length=2`;
@@ -197,7 +198,7 @@ const EditProfile = () => {
     // Show preview first if uploading
     if (coverPreview) return coverPreview;
     // Show existing cover from user data
-    if (user?.cover_url && !coverLoadFailed) return user.cover_url;
+    if (user?.cover_url && !coverLoadFailed) return getMediaUrl(user.cover_url, user.cover_key, 'cover');
     return null;
   };
 

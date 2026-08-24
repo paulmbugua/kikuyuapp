@@ -1,12 +1,13 @@
 import { Link, useLocation } from "@/lib/navigation";
 import { Bell, MessageCircle, Search, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getMediaUrl } from "@/utils/mediaUrl";
 
 export default function Header() {
   const { pathname } = useLocation();
   const { user } = useAuth();
   const avatarFallback = `https://ui-avatars.com/api/?background=0D9488&color=fff&name=${encodeURIComponent(user?.full_name || user?.username || "User")}&length=2`;
-  const avatarUrl = user?.avatar_url || avatarFallback;
+  const avatarUrl = getMediaUrl(user?.avatar_url, user?.avatar_key) || avatarFallback;
   const profileLabel = user?.full_name || user?.username || "Your profile";
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-2xl lg:left-[276px]">

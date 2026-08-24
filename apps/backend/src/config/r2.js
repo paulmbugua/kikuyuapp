@@ -66,4 +66,4 @@ const deleteImage = async (key, target = 'images') => {
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 };
 
-module.exports = { uploadImage, mirrorImage, deleteImage };
+module.exports = { uploadImage, mirrorImage, deleteImage, getClient: () => client, getImageTarget };

@@ -9,7 +9,9 @@ export interface UserProfile {
   full_name: string;
   bio: string;
   avatar_url: string;
+  avatar_key?: string;
   cover_url: string;
+  cover_key?: string;
   is_verified: boolean;
   is_private: boolean;
   is_creator: boolean;

@@ -37,6 +37,7 @@ const followRoutes = require('./modules/follow/follow.routes');
 const notificationRoutes = require('./modules/notification/notification.routes');
 const ruganoRoutes = require('./modules/rugano/rugano.routes');
 const uploadRoutes = require('./modules/upload/upload.routes');
+const { streamImage } = require('./modules/upload/media.controller');
 
 logger.info('✅ All route modules loaded successfully');
 
@@ -135,6 +136,7 @@ app.use(`${apiPrefix}/payments`, paymentRoutes);
 app.use(`${apiPrefix}/notifications`, notificationRoutes);
 app.use(`${apiPrefix}/rugano`, ruganoRoutes);
 app.use(`${apiPrefix}/upload`, uploadRoutes);
+app.get(`${apiPrefix}/media`, streamImage);
 
 // Log all mounted routes
 if (config.isDevelopment) {
