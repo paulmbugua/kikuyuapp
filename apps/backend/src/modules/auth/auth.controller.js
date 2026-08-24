@@ -24,6 +24,32 @@ const safeJson = (value) => JSON.stringify(value)
   .replace(/>/g, '\\u003e')
   .replace(/&/g, '\\u0026');
 
+const allowedFrontendOrigin = (candidate) => {
+  const localOrigins = config.isProduction
+    ? []
+    : ['http://localhost:3000', 'http://localhost:8080', 'http://127.0.0.1:3000', 'http://127.0.0.1:8080'];
+  const allowedOrigins = new Set([...config.googleOAuth.frontendOrigins, ...localOrigins]);
+  return allowedOrigins.has(candidate) ? candidate : config.googleOAuth.frontendOrigin;
+};
+
+const sendOAuthPopupResponse = (res, payload, requestedFrontendOrigin) => {
+  const frontendOrigin = allowedFrontendOrigin(requestedFrontendOrigin);
+  const nonce = crypto.randomBytes(18).toString('base64');
+  const message = safeJson(payload);
+  const targetOrigin = safeJson(frontendOrigin);
+  const fallbackPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const fallbackUrl = safeJson(frontendOrigin + '/login#oauth=' + fallbackPayload);
+  const csp = "default-src 'none'; script-src 'nonce-" + nonce + "'; base-uri 'none'; frame-ancestors 'none'";
+  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Google sign-in</title></head><body><script nonce="' + nonce + '">if (window.opener) { window.opener.postMessage(' + message + ', ' + targetOrigin + '); window.close(); } else { window.location.replace(' + fallbackUrl + '); }</script></body></html>';
+  res.status(200).set({
+    'Cache-Control': 'no-store',
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Security-Policy': csp,
+    'Cross-Origin-Opener-Policy': 'unsafe-none',
+    'Referrer-Policy': 'no-referrer'
+  }).send(html);
+};
+
 const googleLogin = (req, res) => {
   const frontendOrigin = allowedFrontendOrigin(
     typeof req.query.origin === 'string' ? req.query.origin : undefined
