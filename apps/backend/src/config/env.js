@@ -4,9 +4,10 @@ const dotenv = require('dotenv');
 
 // Load environment variables
 const backendEnvPath = path.resolve(__dirname, '../../.env');
-const envResult = dotenv.config({ path: backendEnvPath, override: true });
+const isProductionRuntime = process.env.NODE_ENV === 'production';
+const envResult = dotenv.config({ path: backendEnvPath, override: !isProductionRuntime });
 
-if (envResult.error) {
+if (envResult.error && !isProductionRuntime) {
   throw new Error('Failed to load backend environment file at ' + backendEnvPath + ': ' + envResult.error.message);
 }
 
@@ -21,7 +22,9 @@ const requiredEnvVars = [
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
   'R2_BUCKET_IMAGES',
-  'R2_PUBLIC_BASE_URL_IMAGES'
+  'R2_PUBLIC_BASE_URL_IMAGES',
+  'R2_BUCKET_COVER',
+  'R2_PUBLIC_BASE_URL_COVER'
 ];
 
 // Check for missing required variables
@@ -110,10 +113,12 @@ module.exports = {
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
     buckets: {
       images: process.env.R2_BUCKET_IMAGES,
+      cover: process.env.R2_BUCKET_COVER,
       videos: process.env.R2_BUCKET_VIDEOS
     },
     publicBaseUrls: {
       images: process.env.R2_PUBLIC_BASE_URL_IMAGES,
+      cover: process.env.R2_PUBLIC_BASE_URL_COVER,
       previews: process.env.R2_PUBLIC_BASE_URL_PREVIEWS
     },
     maxImageBytes: parseInt(process.env.R2_MAX_IMAGE_BYTES) || 10 * 1024 * 1024

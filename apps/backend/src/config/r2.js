@@ -17,18 +17,26 @@ const client = new S3Client({
 const trimSlashes = (value) => value.replace(/^\/+|\/+$/g, '');
 const publicUrl = (baseUrl, key) => `${trimSlashes(baseUrl)}/${key.split('/').map(encodeURIComponent).join('/')}`;
 
-const uploadImage = async (file, folder) => {
+const getImageTarget = (target) => {
+  const bucket = config.r2.buckets[target];
+  const baseUrl = config.r2.publicBaseUrls[target];
+  if (!bucket || !baseUrl) throw new Error(`R2 image target is not configured: ${target}`);
+  return { bucket, baseUrl };
+};
+
+const uploadImage = async (file, folder, target = 'images') => {
   if (!file?.buffer && !file?.path) throw new Error('Image data is required');
   if (!config.upload.allowedImageTypes.includes(file.mimetype)) throw new Error('Unsupported image type');
   if (file.size > config.r2.maxImageBytes) throw new Error(`Image exceeds ${config.r2.maxImageBytes} bytes`);
 
+  const { bucket, baseUrl } = getImageTarget(target);
   const extension = path.extname(file.originalname || '').toLowerCase() || `.${file.mimetype.split('/')[1] || 'bin'}`;
   const key = `${trimSlashes(folder)}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${extension}`;
 
   const body = file.buffer || await fs.readFile(file.path);
 
   await client.send(new PutObjectCommand({
-    Bucket: config.r2.buckets.images,
+    Bucket: bucket,
     Key: key,
     Body: body,
     ContentType: file.mimetype,
@@ -37,7 +45,7 @@ const uploadImage = async (file, folder) => {
   }));
 
   return {
-    url: publicUrl(config.r2.publicBaseUrls.images, key),
+    url: publicUrl(baseUrl, key),
     publicId: key,
     resourceType: 'image',
     provider: 'cloudflare-r2',
@@ -52,9 +60,10 @@ const mirrorImage = async (sourceUrl, folder) => {
   const buffer = Buffer.from(response.data);
   return uploadImage({ buffer, size: buffer.length, mimetype, originalname: `profile.${mimetype.split('/')[1] || 'jpg'}` }, folder);
 };
-const deleteImage = async (key) => {
+const deleteImage = async (key, target = 'images') => {
   if (!key) return;
-  await client.send(new DeleteObjectCommand({ Bucket: config.r2.buckets.images, Key: key }));
+  const { bucket } = getImageTarget(target);
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 };
 
 module.exports = { uploadImage, mirrorImage, deleteImage };

@@ -22,3 +22,6 @@ apps/backend/uploads/
 Thumbs.db
 apps/web/AGENTS.md
 apps/web/CLAUDE.md
+.open-next/
+.wrangler/
+apps/web/cloudflare-env.d.ts

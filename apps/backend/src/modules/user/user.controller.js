@@ -205,13 +205,13 @@ const uploadCover = catchAsync(async (req, res) => {
 
   const userId = req.user.id;
   const previous = await pool.query('SELECT cover_key FROM users WHERE id = $1', [userId]);
-  const result = await uploadImage(req.file, 'users/covers');
+  const result = await uploadImage(req.file, 'users/covers', 'cover');
   const updatedUser = await UserModel.updateProfile(userId, {
     cover_url: result.url,
     cover_key: result.publicId
   });
 
-  if (previous.rows[0]?.cover_key) deleteImage(previous.rows[0].cover_key).catch(console.error);
+  if (previous.rows[0]?.cover_key) deleteImage(previous.rows[0].cover_key, 'cover').catch(console.error);
   ResponseHandler.success(res, { cover_url: result.url, user: updatedUser }, 'Cover photo uploaded successfully');
 });
 

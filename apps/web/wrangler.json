@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thutha-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-24",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "NEXTJS_ENV": "production",
+    "NEXT_PUBLIC_SITE_URL": "https://www.thutha.co.ke",
+    "NEXT_PUBLIC_API_URL": "https://server.thutha.co.ke/api/v1"
+  },
+  "routes": [
+    { "pattern": "www.thutha.co.ke", "custom_domain": true },
+    { "pattern": "thutha.co.ke", "custom_domain": true }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
