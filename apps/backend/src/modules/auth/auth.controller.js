@@ -28,6 +28,8 @@ const sendOAuthPopupResponse = (res, payload) => {
   const nonce = crypto.randomBytes(18).toString('base64');
   const message = safeJson(payload);
   const targetOrigin = safeJson(config.googleOAuth.frontendOrigin);
+  const fallbackPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const fallbackUrl = safeJson(`${config.googleOAuth.frontendOrigin}/login#oauth=${fallbackPayload}`);
 
   res
     .status(200)
@@ -35,6 +37,7 @@ const sendOAuthPopupResponse = (res, payload) => {
       'Cache-Control': 'no-store',
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'`,
+      'Cross-Origin-Opener-Policy': 'unsafe-none',
       'Referrer-Policy': 'no-referrer'
     })
     .send(`<!doctype html>
@@ -46,7 +49,7 @@ const sendOAuthPopupResponse = (res, payload) => {
         window.opener.postMessage(${message}, ${targetOrigin});
         window.close();
       } else {
-        document.body.textContent = 'Authentication complete. You may close this window.';
+        window.location.replace(${fallbackUrl});
       }
     </script>
   </body>
@@ -56,6 +59,7 @@ const sendOAuthPopupResponse = (res, payload) => {
 const googleLogin = (req, res) => {
   const state = createState();
   res.cookie(STATE_COOKIE, state, stateCookieOptions);
+  res.set('Cross-Origin-Opener-Policy', 'unsafe-none');
   res.redirect(getAuthorizationUrl(state));
 };
 

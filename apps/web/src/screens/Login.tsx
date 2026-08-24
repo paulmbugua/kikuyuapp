@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuth, type OAuthLoginResult } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -6,6 +6,20 @@ import { toast } from 'sonner';
 const doveLogo = '/dove-logo.png';
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1').replace(/\/$/, '');
 const apiOrigin = new URL(apiBaseUrl).origin;
+
+type OAuthMessage = {
+  type: 'kikuyu:google-oauth';
+  ok: boolean;
+  data?: OAuthLoginResult;
+  error?: string;
+};
+
+const decodeOAuthFragment = (encoded: string): OAuthMessage => {
+  const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+  const bytes = Uint8Array.from(window.atob(padded), (character) => character.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes)) as OAuthMessage;
+};
 
 const openGoogleOAuth = () => new Promise<OAuthLoginResult>((resolve, reject) => {
   const width = 520;
@@ -57,6 +71,36 @@ const Login = () => {
   const { login, isLoading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const encodedPayload = new URLSearchParams(window.location.hash.slice(1)).get('oauth');
+    if (!encodedPayload) return;
+
+    // Remove the short-lived token payload from the address bar before doing any async work.
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+    const completeRedirectLogin = async () => {
+      setIsLoading(true);
+      setError('');
+
+      try {
+        const payload = decodeOAuthFragment(encodedPayload);
+        if (payload.type !== 'kikuyu:google-oauth' || !payload.ok || !payload.data) {
+          throw new Error(payload.error || 'Google sign-in failed');
+        }
+
+        await login(payload.data);
+      } catch (caughtError) {
+        const message = caughtError instanceof Error ? caughtError.message : 'Failed to complete Google sign-in';
+        setError(message);
+        toast.error(message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void completeRedirectLogin();
+  }, [login]);
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
