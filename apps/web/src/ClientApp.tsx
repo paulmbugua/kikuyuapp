@@ -78,6 +78,7 @@ function RouteCanvas() {
   }
 
   let Screen = appRoutes[pathname];
+  if (pathname === "/profile/edit") Screen = EditProfile;
   if (pathname.startsWith("/profile/")) Screen = Profile;
   if (pathname.startsWith("/post/")) Screen = PostDetail;
   if (!Screen) Screen = NotFound;

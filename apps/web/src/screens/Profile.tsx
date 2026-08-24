@@ -377,7 +377,7 @@ const Profile = () => {
                   <Settings className="w-5 h-5" />
                 </Link>
                 <button 
-                  onClick={() => navigate('/profile/edit')}
+                  onClick={() => navigate('/settings/edit-profile')}
                   className="thutha-gradient text-primary-foreground font-medium text-sm px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md"
                 >
                   <Edit className="w-4 h-4" />
