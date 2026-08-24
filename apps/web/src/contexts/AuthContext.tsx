@@ -14,11 +14,22 @@ interface User {
   wallet_balance?: number;
 }
 
+interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: string;
+}
+
+export interface OAuthLoginResult {
+  user: User;
+  tokens: AuthTokens;
+}
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (idToken: string) => Promise<void>;
+  login: (result: OAuthLoginResult) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -41,31 +52,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async () => {
     try {
       const response = await axiosInstance.get('/auth/me');
-      if (response.data.data) {
-        setUser(response.data.data);
-        localStorage.setItem('user', JSON.stringify(response.data.data));
+      const userData = response.data.data?.user || response.data.data;
+      if (userData) {
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
       }
     } catch (error) {
       console.error('Failed to refresh user:', error);
     }
   };
 
-  const login = async (idToken: string) => {
+  const login = async ({ user: userData, tokens }: OAuthLoginResult) => {
     setIsLoading(true);
     try {
-      const response = await axiosInstance.post('/auth/google', { idToken });
-      
-      const { accessToken, refreshToken } = response.data.data.tokens;
-      const userData = response.data.data.user;
-      
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('accessToken', tokens.accessToken);
+      localStorage.setItem('refreshToken', tokens.refreshToken);
       localStorage.setItem('user', JSON.stringify(userData));
-      
       setUser(userData);
       toast.success(`Welcome back, ${userData.full_name || userData.username}!`);
-      
-      // Check onboarding status
+
       const onboarding = localStorage.getItem('thutha_onboarding');
       if (onboarding) {
         try {
@@ -74,16 +79,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             navigate('/feed');
             return;
           }
-        } catch (e) {
-          console.error('Error parsing onboarding:', e);
+        } catch (error) {
+          console.error('Error parsing onboarding:', error);
         }
       }
-      
       navigate('/onboarding');
-    } catch (error: any) {
-      console.error('Login failed:', error);
-      toast.error(error.response?.data?.message || 'Failed to login');
-      throw error;
     } finally {
       setIsLoading(false);
     }

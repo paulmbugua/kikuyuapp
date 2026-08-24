@@ -1,4 +1,5 @@
 // src/modules/auth/auth.controller.js
+const crypto = require('crypto');
 const UserModel = require('../user/user.model');
 const StaffModel = require('../staff/staff.model');
 const { generateTokenPair, verifyRefreshToken } = require('../../utils/tokenUtils');
@@ -7,11 +8,95 @@ const { AppError } = require('../../middleware/errorMiddleware');
 const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
 const pool = require('../../config/db');
+const config = require('../../config/env');
+const {
+  STATE_COOKIE,
+  createState,
+  exchangeCodeForProfile,
+  getAuthorizationUrl,
+  parseCookies,
+  stateCookieOptions,
+  verifyState
+} = require('./googleOAuth.service');
 
-// Compatibility response while provider-based Google login is disabled.
-const googleLogin = catchAsync(async (req, res) => {
-  throw new AppError('Google login is not enabled', 501);
-});
+const safeJson = (value) => JSON.stringify(value)
+  .replace(/</g, '\\u003c')
+  .replace(/>/g, '\\u003e')
+  .replace(/&/g, '\\u0026');
+
+const sendOAuthPopupResponse = (res, payload) => {
+  const nonce = crypto.randomBytes(18).toString('base64');
+  const message = safeJson(payload);
+  const targetOrigin = safeJson(config.googleOAuth.frontendOrigin);
+
+  res
+    .status(200)
+    .set({
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'`,
+      'Referrer-Policy': 'no-referrer'
+    })
+    .send(`<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Google sign-in</title></head>
+  <body>
+    <script nonce="${nonce}">
+      if (window.opener) {
+        window.opener.postMessage(${message}, ${targetOrigin});
+        window.close();
+      } else {
+        document.body.textContent = 'Authentication complete. You may close this window.';
+      }
+    </script>
+  </body>
+</html>`);
+};
+
+const googleLogin = (req, res) => {
+  const state = createState();
+  res.cookie(STATE_COOKIE, state, stateCookieOptions);
+  res.redirect(getAuthorizationUrl(state));
+};
+
+const googleCallback = async (req, res) => {
+  const clearOptions = {
+    httpOnly: stateCookieOptions.httpOnly,
+    secure: stateCookieOptions.secure,
+    sameSite: stateCookieOptions.sameSite,
+    path: stateCookieOptions.path
+  };
+
+  try {
+    const { code, error, state } = req.query;
+    if (error) throw new AppError(`Google sign-in was cancelled: ${error}`, 400);
+    if (!code || typeof code !== 'string') throw new AppError('Google authorization code is missing', 400);
+
+    const cookies = parseCookies(req.headers.cookie);
+    if (!verifyState(state, cookies[STATE_COOKIE])) {
+      throw new AppError('Invalid or expired Google OAuth state', 400);
+    }
+
+    const googleProfile = await exchangeCodeForProfile(code);
+    const user = await UserModel.findOrCreateFromGoogle(googleProfile);
+    const tokens = generateTokenPair({ id: user.id, email: user.email, role: 'user', isStaff: false });
+    delete user.google_sub;
+
+    res.clearCookie(STATE_COOKIE, clearOptions);
+    return sendOAuthPopupResponse(res, {
+      type: 'kikuyu:google-oauth',
+      ok: true,
+      data: { user, tokens }
+    });
+  } catch (error) {
+    res.clearCookie(STATE_COOKIE, clearOptions);
+    return sendOAuthPopupResponse(res, {
+      type: 'kikuyu:google-oauth',
+      ok: false,
+      error: error.message || 'Google sign-in failed'
+    });
+  }
+};
 
 // Staff Login (email + password)
 const staffLogin = catchAsync(async (req, res) => {
@@ -173,6 +258,7 @@ const getMe = catchAsync(async (req, res) => {
 
 module.exports = {
   googleLogin,
+  googleCallback,
   staffLogin,
   refreshToken,
   logout,

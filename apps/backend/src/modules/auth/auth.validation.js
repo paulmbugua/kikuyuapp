@@ -1,15 +1,6 @@
 // src/modules/auth/auth.validation.js
 const { body } = require('express-validator');
 
-// Google login validation
-const validateGoogleLogin = [
-  body('idToken')
-    .notEmpty()
-    .withMessage('ID token is required')
-    .isString()
-    .withMessage('ID token must be a string')
-];
-
 // Staff login validation
 const validateStaffLogin = [
   body('email')
@@ -49,7 +40,6 @@ const validateChangePassword = [
 ];
 
 module.exports = {
-  validateGoogleLogin,
   validateStaffLogin,
   validateRefreshToken,
   validateChangePassword

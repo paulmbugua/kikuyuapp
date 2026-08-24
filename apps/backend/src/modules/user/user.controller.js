@@ -168,7 +168,6 @@ const updateProfile = catchAsync(async (req, res) => {
 
   delete updates.id;
   delete updates.email;
-  delete updates.firebase_uid;
   delete updates.token_balance;
   delete updates.followers_count;
   delete updates.following_count;

@@ -32,20 +32,34 @@ const parseCorsOrigin = () => {
   return origins.map(origin => origin.trim());
 };
 
+const googleClientId = process.env.GOOGLE_CLIENT_ID_WEB || process.env.GOOGLE_CLIENT_ID;
+if (!googleClientId) {
+  throw new Error('❌ Missing required environment variable: GOOGLE_CLIENT_ID_WEB or GOOGLE_CLIENT_ID');
+}
+if (!process.env.GOOGLE_CLIENT_SECRET) {
+  throw new Error('❌ Missing required environment variable: GOOGLE_CLIENT_SECRET');
+}
+
+const serverPort = parseInt(process.env.PORT) || 5000;
+const apiPrefix = process.env.API_PREFIX || '/api/v1';
+const isProduction = process.env.NODE_ENV === 'production';
+const localBackendOrigin = `http://localhost:${serverPort}`;
+const localFrontendOrigin = parseCorsOrigin()[0] || 'http://localhost:8080';
+
 // Export validated config
 module.exports = {
   env: process.env.NODE_ENV || 'development',
   isDevelopment: process.env.NODE_ENV === 'development',
-  isProduction: process.env.NODE_ENV === 'production',
+  isProduction,
   isTest: process.env.NODE_ENV === 'test',
-  
+
   server: {
-    port: parseInt(process.env.PORT) || 5000,
-    apiPrefix: process.env.API_PREFIX || '/api/v1',
+    port: serverPort,
+    apiPrefix,
     corsOrigin: parseCorsOrigin(),
     sessionSecret: process.env.SESSION_SECRET || 'session-secret'
   },
-  
+
   database: {
     url: process.env.DATABASE_URL,
     host: process.env.DB_HOST || 'localhost',
@@ -60,21 +74,33 @@ module.exports = {
       connectionTimeoutMillis: 2000
     }
   },
-  
+
   jwt: {
     secret: process.env.JWT_SECRET,
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     refreshSecret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d'
   },
-  
+
+  googleOAuth: {
+    clientId: googleClientId,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri: isProduction
+      ? process.env.GOOGLE_CALLBACK_URL
+      : `${localBackendOrigin}${apiPrefix}/auth/google/callback`,
+    frontendOrigin: isProduction
+      ? process.env.FRONTEND_URL
+      : localFrontendOrigin,
+    stateTtl: '10m'
+  },
+
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
     folder: process.env.NODE_ENV === 'production' ? 'rugano/prod' : 'rugano/dev'
   },
-  
+
   mpesa: {
     consumerKey: process.env.MPESA_CONSUMER_KEY,
     consumerSecret: process.env.MPESA_CONSUMER_SECRET,
@@ -84,12 +110,12 @@ module.exports = {
     environment: process.env.MPESA_ENVIRONMENT || 'sandbox',
     callbackUrl: process.env.MPESA_CALLBACK_URL
   },
-  
+
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
     max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
   },
-  
+
   upload: {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024,
     maxImageSize: parseInt(process.env.MAX_IMAGE_SIZE) || 5 * 1024 * 1024,
@@ -106,11 +132,11 @@ module.exports = {
       'video/webm'
     ]
   },
-  
+
   bcrypt: {
     rounds: parseInt(process.env.BCRYPT_ROUNDS) || 12
   },
-  
+
   logging: {
     level: process.env.LOG_LEVEL || 'info',
     filePath: process.env.LOG_FILE_PATH || 'logs/app.log'

@@ -2,35 +2,47 @@
 const pool = require('../../config/db');
 
 class UserModel {
-  // Create or update user from Firebase
-  static async findOrCreateFromFirebase(firebaseUser) {
-    const { uid, email, name, picture } = firebaseUser;
+  static async findOrCreateFromGoogle(googleUser) {
+    const { sub, email, name, picture, emailVerified } = googleUser;
+    const existingResult = await pool.query(
+      'SELECT * FROM users WHERE google_sub = $1 OR LOWER(email) = LOWER($2) LIMIT 1',
+      [sub, email]
+    );
+    const existing = existingResult.rows[0];
 
-    // Generate username from email
-    const baseUsername = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (existing) {
+      if (existing.google_sub && existing.google_sub !== sub) {
+        throw new Error('This email is already linked to a different Google account');
+      }
+      const updated = await pool.query(
+        `UPDATE users
+         SET google_sub = $1,
+             full_name = COALESCE($2, full_name),
+             avatar_url = COALESCE($3, avatar_url),
+             is_verified = is_verified OR $4,
+             last_login = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $5
+         RETURNING *`,
+        [sub, name, picture, emailVerified, existing.id]
+      );
+      return updated.rows[0];
+    }
+
+    const baseUsername = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || 'member';
     let username = baseUsername;
     let counter = 1;
-
-    // Check if username exists and generate unique one
     while (await this.usernameExists(username)) {
       username = `${baseUsername}${counter}`;
       counter++;
     }
 
-    const query = `
-      INSERT INTO users (firebase_uid, email, username, full_name, avatar_url, last_login)
-      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-      ON CONFLICT (firebase_uid) 
-      DO UPDATE SET 
-        last_login = CURRENT_TIMESTAMP,
-        full_name = COALESCE(EXCLUDED.full_name, users.full_name),
-        avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url)
-      RETURNING *
-    `;
-
-    const values = [uid, email, username, name, picture];
-    const result = await pool.query(query, values);
-    
+    const result = await pool.query(
+      `INSERT INTO users (google_sub, email, username, full_name, avatar_url, is_verified, last_login)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [sub, email, username, name, picture, emailVerified]
+    );
     return result.rows[0];
   }
 
@@ -46,8 +58,8 @@ class UserModel {
   // Get user by ID
   static async findById(id) {
     const result = await pool.query(
-      `SELECT id, firebase_uid, email, username, full_name, bio, avatar_url, 
-              cover_url, phone, gender, date_of_birth, country, is_verified, 
+      `SELECT id, email, username, full_name, bio, avatar_url,
+              cover_url, phone, gender, date_of_birth, country, is_verified,
               is_private, is_active, token_balance, total_earned, total_tips_sent,
               followers_count, following_count, posts_count, last_login, created_at
        FROM users WHERE id = $1`,
@@ -61,15 +73,6 @@ class UserModel {
     const result = await pool.query(
       'SELECT * FROM users WHERE email = $1',
       [email]
-    );
-    return result.rows[0];
-  }
-
-  // Get user by Firebase UID
-  static async findByFirebaseUid(uid) {
-    const result = await pool.query(
-      'SELECT * FROM users WHERE firebase_uid = $1',
-      [uid]
     );
     return result.rows[0];
   }
@@ -97,7 +100,7 @@ class UserModel {
 
     values.push(id);
     const query = `
-      UPDATE users 
+      UPDATE users
       SET ${setClause.join(', ')}, updated_at = CURRENT_TIMESTAMP
       WHERE id = $${paramIndex}
       RETURNING *
@@ -111,9 +114,9 @@ class UserModel {
   static async updateTokenBalance(id, amount, type = 'add') {
     const operation = type === 'add' ? '+' : '-';
     const query = `
-      UPDATE users 
+      UPDATE users
       SET token_balance = token_balance ${operation} $1,
-          ${type === 'add' ? 'total_earned' : 'total_tips_sent'} = 
+          ${type === 'add' ? 'total_earned' : 'total_tips_sent'} =
           ${type === 'add' ? 'total_earned' : 'total_tips_sent'} + $1
       WHERE id = $2 AND token_balance ${type === 'subtract' ? '>=' : '>='} $1
       RETURNING token_balance
@@ -128,12 +131,12 @@ class UserModel {
     const searchQuery = `
       SELECT id, username, full_name, avatar_url, is_verified, followers_count
       FROM users
-      WHERE 
-        username ILIKE $1 OR 
+      WHERE
+        username ILIKE $1 OR
         full_name ILIKE $1 OR
         email ILIKE $1
-      ORDER BY 
-        CASE 
+      ORDER BY
+        CASE
           WHEN username ILIKE $2 THEN 1
           WHEN username ILIKE $1 THEN 2
           WHEN full_name ILIKE $1 THEN 3
@@ -145,55 +148,55 @@ class UserModel {
 
     const exactMatch = query;
     const partialMatch = `%${query}%`;
-    
+
     const result = await pool.query(searchQuery, [partialMatch, exactMatch, limit, offset]);
     return result.rows;
   }
     // Get user profile with stats
   static async getProfile(userId, currentUserId = null) {
     const query = `
-      SELECT 
+      SELECT
         u.id, u.username, u.full_name, u.bio, u.avatar_url, u.cover_url,
         u.phone, u.gender, u.date_of_birth, u.country, u.is_verified,
         u.is_private, u.is_active, u.token_balance,
         u.followers_count, u.following_count, u.posts_count,
         u.created_at,
-        
+
         -- Check if current user follows this user
-        CASE 
-          WHEN $2 IS NOT NULL THEN 
+        CASE
+          WHEN $2 IS NOT NULL THEN
             EXISTS(
-              SELECT 1 FROM follows 
+              SELECT 1 FROM follows
               WHERE follower_id = $2 AND following_id = u.id AND status = 'accepted'
             )
           ELSE false
         END as is_following,
-        
+
         -- Check if follow request is pending
-        CASE 
+        CASE
           WHEN $2 IS NOT NULL AND u.is_private THEN
             EXISTS(
-              SELECT 1 FROM follows 
+              SELECT 1 FROM follows
               WHERE follower_id = $2 AND following_id = u.id AND status = 'pending'
             )
           ELSE false
         END as follow_request_pending,
-        
+
         -- Check if this user follows current user
-        CASE 
-          WHEN $2 IS NOT NULL THEN 
+        CASE
+          WHEN $2 IS NOT NULL THEN
             EXISTS(
-              SELECT 1 FROM follows 
+              SELECT 1 FROM follows
               WHERE follower_id = u.id AND following_id = $2 AND status = 'accepted'
             )
           ELSE false
         END as is_followed_by,
-        
+
         -- Check if blocked
-        CASE 
-          WHEN $2 IS NOT NULL THEN 
+        CASE
+          WHEN $2 IS NOT NULL THEN
             EXISTS(
-              SELECT 1 FROM follows 
+              SELECT 1 FROM follows
               WHERE (
                 (follower_id = $2 AND following_id = u.id) OR
                 (follower_id = u.id AND following_id = $2)
@@ -201,11 +204,11 @@ class UserModel {
             )
           ELSE false
         END as is_blocked
-        
+
       FROM users u
       WHERE u.id = $1 AND u.is_active = true
     `;
-    
+
     const result = await pool.query(query, [userId, currentUserId]);
     return result.rows[0];
   }
@@ -213,25 +216,25 @@ class UserModel {
   // Get multiple user profiles (for feed, suggestions)
   static async getProfiles(userIds, currentUserId = null) {
     if (userIds.length === 0) return [];
-    
+
     const query = `
-      SELECT 
+      SELECT
         u.id, u.username, u.full_name, u.avatar_url, u.is_verified,
         u.followers_count, u.following_count, u.posts_count,
-        
-        CASE 
-          WHEN $2 IS NOT NULL THEN 
+
+        CASE
+          WHEN $2 IS NOT NULL THEN
             EXISTS(
-              SELECT 1 FROM follows 
+              SELECT 1 FROM follows
               WHERE follower_id = $2 AND following_id = u.id AND status = 'accepted'
             )
           ELSE false
         END as is_following
-        
+
       FROM users u
       WHERE u.id = ANY($1::uuid[]) AND u.is_active = true
     `;
-    
+
     const result = await pool.query(query, [userIds, currentUserId]);
     return result.rows;
   }
@@ -240,10 +243,10 @@ class UserModel {
   static async getSuggestions(currentUserId, limit = 20) {
     const query = `
       WITH suggested_users AS (
-        SELECT 
+        SELECT
           u.id, u.username, u.full_name, u.avatar_url, u.is_verified,
           u.followers_count,
-          
+
           -- Score based on followers and mutual follows
           (
             u.followers_count * 0.7 +
@@ -252,39 +255,39 @@ class UserModel {
               FROM follows f1
               WHERE f1.following_id = u.id
               AND f1.follower_id IN (
-                SELECT following_id 
-                FROM follows 
+                SELECT following_id
+                FROM follows
                 WHERE follower_id = $1 AND status = 'accepted'
               )
             ), 0)
           ) as relevance_score
-          
+
         FROM users u
         WHERE u.id != $1
           AND u.is_active = true
           AND u.is_private = false
           AND NOT EXISTS (
-            SELECT 1 FROM follows 
+            SELECT 1 FROM follows
             WHERE follower_id = $1 AND following_id = u.id
           )
           AND NOT EXISTS (
-            SELECT 1 FROM follows 
+            SELECT 1 FROM follows
             WHERE follower_id = u.id AND following_id = $1 AND status = 'blocked'
           )
         ORDER BY relevance_score DESC, u.followers_count DESC
         LIMIT $2
       )
-      SELECT 
+      SELECT
         su.*,
         EXISTS(
           SELECT 1 FROM follows f
-          WHERE f.follower_id = su.id 
-          AND f.following_id = $1 
+          WHERE f.follower_id = su.id
+          AND f.following_id = $1
           AND f.status = 'accepted'
         ) as follows_you
       FROM suggested_users su
     `;
-    
+
     const result = await pool.query(query, [currentUserId, limit]);
     return result.rows;
   }
@@ -292,43 +295,43 @@ class UserModel {
   // Search users with filters
   static async search(filters, limit = 20, offset = 0) {
     const { query, isVerified, country } = filters;
-    
+
     let sqlQuery = `
-      SELECT 
+      SELECT
         id, username, full_name, avatar_url, is_verified,
         followers_count, bio, country
       FROM users
       WHERE is_active = true
     `;
-    
+
     const values = [];
     let paramIndex = 1;
-    
+
     if (query) {
       sqlQuery += ` AND (
-        username ILIKE $${paramIndex} OR 
+        username ILIKE $${paramIndex} OR
         full_name ILIKE $${paramIndex} OR
         bio ILIKE $${paramIndex}
       )`;
       values.push(`%${query}%`);
       paramIndex++;
     }
-    
+
     if (isVerified !== undefined) {
       sqlQuery += ` AND is_verified = $${paramIndex}`;
       values.push(isVerified);
       paramIndex++;
     }
-    
+
     if (country) {
       sqlQuery += ` AND country ILIKE $${paramIndex}`;
       values.push(`%${country}%`);
       paramIndex++;
     }
-    
+
     sqlQuery += ` ORDER BY followers_count DESC, username ASC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     values.push(limit, offset);
-    
+
     const result = await pool.query(sqlQuery, values);
     return result.rows;
   }
@@ -336,12 +339,12 @@ class UserModel {
   // Update privacy settings
   static async updatePrivacy(userId, isPrivate) {
     const query = `
-      UPDATE users 
+      UPDATE users
       SET is_private = $1, updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       RETURNING is_private
     `;
-    
+
     const result = await pool.query(query, [isPrivate, userId]);
     return result.rows[0];
   }
@@ -349,21 +352,21 @@ class UserModel {
   // Get mutual followers
   static async getMutualFollowers(userId1, userId2, limit = 50) {
     const query = `
-      SELECT 
+      SELECT
         u.id, u.username, u.full_name, u.avatar_url, u.is_verified
       FROM users u
       WHERE u.id IN (
         SELECT f1.follower_id
         FROM follows f1
         JOIN follows f2 ON f1.follower_id = f2.follower_id
-        WHERE f1.following_id = $1 
+        WHERE f1.following_id = $1
           AND f2.following_id = $2
           AND f1.status = 'accepted'
           AND f2.status = 'accepted'
       )
       LIMIT $3
     `;
-    
+
     const result = await pool.query(query, [userId1, userId2, limit]);
     return result.rows;
   }
@@ -379,7 +382,7 @@ class UserModel {
           'date', date,
           'count', count
         )) FROM (
-          SELECT 
+          SELECT
             DATE(created_at) as date,
             COUNT(*) as count
           FROM follows
@@ -389,7 +392,7 @@ class UserModel {
           ORDER BY date DESC
         ) as daily_stats) as follower_growth
     `;
-    
+
     const result = await pool.query(query, [userId]);
     return result.rows[0];
   }
