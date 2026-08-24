@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { backendOrigin } from '@/utils/axiosConfig';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -22,29 +23,24 @@ export const useSocket = () => useContext(SocketContext);
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const { isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
+
     const token = localStorage.getItem('accessToken');
-    if (!token) {
-      console.log('No token found for socket connection');
-      return;
-    }
+    if (!token) return;
 
-    console.log('Attempting to connect socket...');
-
-    // Simplified connection
     const socketInstance = io(backendOrigin, {
       auth: { token },
-      transports: ['polling', 'websocket'] // Try polling first
+      transports: ['polling', 'websocket'],
     });
 
     socketInstance.on('connect', () => {
-      console.log('✅ Socket connected!', socketInstance.id);
       setIsConnected(true);
     });
 
     socketInstance.on('disconnect', () => {
-      console.log('❌ Socket disconnected');
       setIsConnected(false);
     });
 
@@ -56,15 +52,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSocket(socketInstance);
 
     return () => {
-      if (socketInstance) {
-        socketInstance.disconnect();
-      }
+      socketInstance.removeAllListeners();
+      socketInstance.disconnect();
+      setSocket(null);
+      setIsConnected(false);
     };
-  }, []);
+  }, [isAuthenticated, isLoading]);
 
   const reconnect = () => {
-    console.log('Manual reconnect requested');
     if (socket) {
+      const token = localStorage.getItem('accessToken');
+      if (!token) return;
+      socket.auth = { token };
       socket.disconnect();
       socket.connect();
     }
