@@ -22,11 +22,18 @@ const EditProfile = () => {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  const [coverLoadFailed, setCoverLoadFailed] = useState(false);
   
   // Load user data
   useEffect(() => {
     loadUserData();
   }, []);
+
+  useEffect(() => () => {
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+  }, [avatarPreview, coverPreview]);
 
   const loadUserData = async () => {
     setLoading(true);
@@ -82,17 +89,14 @@ const EditProfile = () => {
       // Create preview
       const previewUrl = URL.createObjectURL(file);
       setAvatarPreview(previewUrl);
+      setAvatarLoadFailed(false);
       
       // Upload to server
       const result = await uploadAvatar(file);
       console.log('Avatar uploaded:', result);
       
       toast.success('Avatar uploaded successfully!', { id: toastId });
-      
-      // Clear preview after successful upload
-      setTimeout(() => {
-        setAvatarPreview(null);
-      }, 2000);
+      // Keep the local preview visible until navigation.
     } catch (error: any) {
       console.error('Error uploading avatar:', error);
       toast.error(error.response?.data?.message || 'Failed to upload avatar. Please try again.', { id: toastId });
@@ -125,17 +129,14 @@ const EditProfile = () => {
       // Create preview
       const previewUrl = URL.createObjectURL(file);
       setCoverPreview(previewUrl);
+      setCoverLoadFailed(false);
       
       // Upload to server
       const result = await uploadCover(file);
       console.log('Cover uploaded:', result);
       
       toast.success('Cover photo uploaded successfully!', { id: toastId });
-      
-      // Clear preview after successful upload
-      setTimeout(() => {
-        setCoverPreview(null);
-      }, 2000);
+      // Keep the local preview visible until navigation.
     } catch (error: any) {
       console.error('Error uploading cover:', error);
       toast.error(error.response?.data?.message || 'Failed to upload cover. Please try again.', { id: toastId });
@@ -186,7 +187,7 @@ const EditProfile = () => {
     // Show preview first if uploading
     if (avatarPreview) return avatarPreview;
     // Show existing avatar from user data
-    if (user?.avatar_url) return user.avatar_url;
+    if (user?.avatar_url && !avatarLoadFailed) return user.avatar_url;
     // Fallback to avatar with initials
     const name = fullName || username || 'User';
     return `https://ui-avatars.com/api/?background=0D9488&color=fff&name=${encodeURIComponent(name)}&length=2`;
@@ -196,7 +197,7 @@ const EditProfile = () => {
     // Show preview first if uploading
     if (coverPreview) return coverPreview;
     // Show existing cover from user data
-    if (user?.cover_url) return user.cover_url;
+    if (user?.cover_url && !coverLoadFailed) return user.cover_url;
     return null;
   };
 
@@ -236,6 +237,7 @@ const EditProfile = () => {
               src={getCurrentCoverUrl()!}
               alt="Cover"
               className="w-full h-full object-cover"
+              onError={() => setCoverLoadFailed(true)}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground">
@@ -276,6 +278,7 @@ const EditProfile = () => {
             src={getCurrentAvatarUrl()}
             alt="Profile"
             className="w-24 h-24 rounded-full object-cover border-4 border-card shadow-lg"
+            onError={() => setAvatarLoadFailed(true)}
           />
           
           {/* Upload overlay on hover */}
