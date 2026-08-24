@@ -34,14 +34,19 @@ requiredEnvVars.forEach(envVar => {
   }
 });
 
-// Parse CORS origins
-const parseCorsOrigin = () => {
-  const defaults = process.env.NODE_ENV === 'production'
-    ? ['https://www.thutha.co.ke', 'https://thutha.co.ke']
-    : ['http://localhost:8080', 'http://localhost:3000'];
-  const configured = process.env.CORS_ORIGIN?.split(',') || defaults;
-  if (process.env.FRONTEND_URL) configured.push(process.env.FRONTEND_URL);
-  return [...new Set(configured.map((origin) => origin.trim()).filter(Boolean))];
+const normalizeOrigin = (value, variableName) => {
+  try {
+    const url = new URL(value.trim());
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+    return url.origin;
+  } catch {
+    throw new Error(`❌ ${variableName} contains an invalid HTTP(S) origin: ${value}`);
+  }
+};
+
+const parseOriginList = (value, defaults, variableName) => {
+  const entries = value ? value.split(',') : defaults;
+  return [...new Set(entries.map((entry) => entry.trim()).filter(Boolean).map((entry) => normalizeOrigin(entry, variableName)))];
 };
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID_WEB;
@@ -56,7 +61,16 @@ const serverPort = parseInt(process.env.PORT) || 5000;
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
 const isProduction = process.env.NODE_ENV === 'production';
 const localBackendOrigin = `http://localhost:${serverPort}`;
-const localFrontendOrigin = parseCorsOrigin()[0] || 'http://localhost:8080';
+const defaultFrontendOrigins = isProduction
+  ? ['https://www.thutha.co.ke', 'https://thutha.co.ke']
+  : ['http://localhost:8080', 'http://localhost:3000'];
+const frontendOrigins = parseOriginList(process.env.FRONTEND_URL, defaultFrontendOrigins, 'FRONTEND_URL');
+const corsOrigins = [...new Set([
+  ...parseOriginList(process.env.CORS_ORIGIN, defaultFrontendOrigins, 'CORS_ORIGIN'),
+  ...frontendOrigins
+])];
+const frontendOrigin = frontendOrigins[0];
+const backendOrigin = parseOriginList(process.env.WEB_BACKEND_URL, [localBackendOrigin], 'WEB_BACKEND_URL')[0];
 
 // Export validated config
 module.exports = {
@@ -68,7 +82,8 @@ module.exports = {
   server: {
     port: serverPort,
     apiPrefix,
-    corsOrigin: parseCorsOrigin(),
+    backendOrigin,
+    corsOrigin: corsOrigins,
     sessionSecret: process.env.SESSION_SECRET || 'session-secret'
   },
 
@@ -98,11 +113,10 @@ module.exports = {
     clientId: googleClientId,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     redirectUri: isProduction
-      ? process.env.GOOGLE_CALLBACK_URL
+      ? (process.env.GOOGLE_CALLBACK_URL || `${backendOrigin}${apiPrefix}/auth/google/callback`)
       : `${localBackendOrigin}${apiPrefix}/auth/google/callback`,
-    frontendOrigin: isProduction
-      ? (process.env.FRONTEND_URL || 'https://www.thutha.co.ke')
-      : localFrontendOrigin,
+    frontendOrigin,
+    frontendOrigins,
     stateTtl: '10m'
   },
 

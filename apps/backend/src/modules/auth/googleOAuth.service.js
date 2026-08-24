@@ -11,8 +11,8 @@ const oauthClient = new OAuth2Client({
   redirectUri: config.googleOAuth.redirectUri
 });
 
-const createState = () => jwt.sign(
-  { purpose: 'google-oauth', nonce: crypto.randomBytes(24).toString('hex') },
+const createState = (frontendOrigin) => jwt.sign(
+  { purpose: 'google-oauth', nonce: crypto.randomBytes(24).toString('hex'), frontendOrigin },
   config.jwt.secret,
   { expiresIn: config.googleOAuth.stateTtl, audience: 'google-oauth', issuer: 'kikuyuapp' }
 );
@@ -23,7 +23,7 @@ const verifyState = (state, cookieState) => {
   const cookieBuffer = Buffer.from(cookieState);
   if (stateBuffer.length !== cookieBuffer.length || !crypto.timingSafeEqual(stateBuffer, cookieBuffer)) return false;
   const payload = jwt.verify(state, config.jwt.secret, { audience: 'google-oauth', issuer: 'kikuyuapp' });
-  return payload.purpose === 'google-oauth';
+  return payload.purpose === 'google-oauth' ? payload : false;
 };
 
 const getAuthorizationUrl = (state) => oauthClient.generateAuthUrl({

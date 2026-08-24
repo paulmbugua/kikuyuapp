@@ -36,12 +36,19 @@ const prepareGoogleProfileImage = async (profile) => {
   const mirrored = await mirrorImage(profile.picture, 'users/google-avatars');
   return { ...profile, picture: mirrored.url, pictureKey: mirrored.publicId };
 };
-const sendOAuthPopupResponse = (res, payload) => {
+const allowedFrontendOrigin = (candidate) => (
+  config.googleOAuth.frontendOrigins.includes(candidate)
+    ? candidate
+    : config.googleOAuth.frontendOrigin
+);
+
+const sendOAuthPopupResponse = (res, payload, requestedFrontendOrigin) => {
+  const frontendOrigin = allowedFrontendOrigin(requestedFrontendOrigin);
   const nonce = crypto.randomBytes(18).toString('base64');
   const message = safeJson(payload);
-  const targetOrigin = safeJson(config.googleOAuth.frontendOrigin);
+  const targetOrigin = safeJson(frontendOrigin);
   const fallbackPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
-  const fallbackUrl = safeJson(`${config.googleOAuth.frontendOrigin}/login#oauth=${fallbackPayload}`);
+  const fallbackUrl = safeJson(`${frontendOrigin}/login#oauth=${fallbackPayload}`);
 
   res
     .status(200)
@@ -69,13 +76,17 @@ const sendOAuthPopupResponse = (res, payload) => {
 };
 
 const googleLogin = (req, res) => {
-  const state = createState();
+  const frontendOrigin = allowedFrontendOrigin(
+    typeof req.query.origin === 'string' ? req.query.origin : undefined
+  );
+  const state = createState(frontendOrigin);
   res.cookie(STATE_COOKIE, state, stateCookieOptions);
   res.set('Cross-Origin-Opener-Policy', 'unsafe-none');
   res.redirect(getAuthorizationUrl(state));
 };
 
 const googleCallback = async (req, res) => {
+  let frontendOrigin = config.googleOAuth.frontendOrigin;
   const clearOptions = {
     httpOnly: stateCookieOptions.httpOnly,
     secure: stateCookieOptions.secure,
@@ -89,9 +100,11 @@ const googleCallback = async (req, res) => {
     if (!code || typeof code !== 'string') throw new AppError('Google authorization code is missing', 400);
 
     const cookies = parseCookies(req.headers.cookie);
-    if (!verifyState(state, cookies[STATE_COOKIE])) {
+    const statePayload = verifyState(state, cookies[STATE_COOKIE]);
+    if (!statePayload) {
       throw new AppError('Invalid or expired Google OAuth state', 400);
     }
+    frontendOrigin = allowedFrontendOrigin(statePayload.frontendOrigin);
 
     const googleProfile = await exchangeCodeForProfile(code);
     const preparedProfile = await prepareGoogleProfileImage(googleProfile);
@@ -104,14 +117,14 @@ const googleCallback = async (req, res) => {
       type: 'kikuyu:google-oauth',
       ok: true,
       data: { user, tokens }
-    });
+    }, frontendOrigin);
   } catch (error) {
     res.clearCookie(STATE_COOKIE, clearOptions);
     return sendOAuthPopupResponse(res, {
       type: 'kikuyu:google-oauth',
       ok: false,
       error: error.message || 'Google sign-in failed'
-    });
+    }, frontendOrigin);
   }
 };
 

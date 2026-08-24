@@ -26,8 +26,10 @@ const openGoogleOAuth = () => new Promise<OAuthLoginResult>((resolve, reject) =>
   const height = 680;
   const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
   const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
+  const googleOAuthUrl = new URL(`${apiBaseUrl}/auth/google`);
+  googleOAuthUrl.searchParams.set('origin', window.location.origin);
   const popup = window.open(
-    `${apiBaseUrl}/auth/google`,
+    googleOAuthUrl.toString(),
     'kikuyu-google-oauth',
     `popup=yes,width=${width},height=${height},left=${left},top=${top}`
   );
