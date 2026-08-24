@@ -81,7 +81,7 @@ class UhoroCommentModel {
     }
 
     // Get comments for a video
-    static async getVideoComments(videoId, currentUserId = null, limit = 50, offset = 0) {
+    static async getVideoComments(videoId, currentUserId = null, sort = 'popular', limit = 50, offset = 0) {
         const query = `
             SELECT 
                 c.*,
@@ -99,7 +99,7 @@ class UhoroCommentModel {
                 c.video_id = $1 
                 AND c.parent_id IS NULL
                 AND c.is_active = true
-            ORDER BY c.likes_count DESC, c.created_at DESC
+            ORDER BY ${sort === 'recent' ? 'c.created_at DESC' : sort === 'oldest' ? 'c.created_at ASC' : 'c.likes_count DESC, c.created_at DESC'}
             LIMIT $3 OFFSET $4
         `;
 

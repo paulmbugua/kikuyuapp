@@ -31,18 +31,10 @@ export const useUserStore = create<UserState>()(
             set({ user: JSON.parse(storedUser) });
           }
           
-          // Fetch fresh data from API
-          const response = await fetch('http://localhost:5000/api/v1/users/me', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-            },
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            set({ user: data.data.user });
-            localStorage.setItem('user', JSON.stringify(data.data.user));
-          }
+          // Fetch authoritative profile data through the configured backend API.
+          const freshUser = await userService.getMyProfile();
+          set({ user: freshUser });
+          localStorage.setItem('user', JSON.stringify(freshUser));
         } catch (error) {
           console.error('Failed to fetch user:', error);
         } finally {

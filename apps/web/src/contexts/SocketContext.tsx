@@ -1,6 +1,7 @@
 // src/contexts/SocketContext.tsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { backendOrigin } from '@/utils/axiosConfig';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -32,7 +33,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     console.log('Attempting to connect socket...');
 
     // Simplified connection
-    const socketInstance = io('http://localhost:5000', {
+    const socketInstance = io(backendOrigin, {
       auth: { token },
       transports: ['polling', 'websocket'] // Try polling first
     });

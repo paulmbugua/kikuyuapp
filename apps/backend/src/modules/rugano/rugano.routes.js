@@ -5,6 +5,7 @@ const { protect, optionalAuth } = require('../../middleware/authMiddleware');
 
 // Public routes (with optional auth)
 router.get('/live', ruganoController.getLiveSpaces);
+router.get('/upcoming', ruganoController.getUpcomingSpaces);
 router.get('/:spaceId', optionalAuth, ruganoController.getSpaceDetails);
 
 // Protected routes
@@ -21,6 +22,9 @@ router.post('/:spaceId/leave', ruganoController.leaveSpace);
 router.post('/:spaceId/raise-hand', ruganoController.raiseHand);
 router.post('/:spaceId/lower-hand', ruganoController.lowerHand);
 router.post('/:spaceId/approve-speaker/:participantId', ruganoController.approveSpeaker);
+router.post('/:spaceId/mute/:participantId', ruganoController.toggleMute);
+router.post('/:spaceId/remove/:participantId', ruganoController.removeParticipant);
+router.get('/active/me', ruganoController.getUserActiveSpaces);
 
 // Chat
 router.get('/:spaceId/messages', ruganoController.getMessages);

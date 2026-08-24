@@ -1,8 +1,8 @@
 import axiosInstance from '@/utils/axiosConfig';
 
 export interface UserProfile {
-  location: import("react/jsx-runtime").JSX.Element;
-  website: any;
+  location?: string;
+  website?: string;
   id: string;
   username: string;
   email: string;
@@ -29,6 +29,9 @@ export interface UpdateProfileData {
   username?: string;
   is_private?: boolean;
   is_creator?: boolean;
+  website?: string;
+  location?: string;
+  country?: string;
 }
 
 const userService = {

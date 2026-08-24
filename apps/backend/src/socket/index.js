@@ -14,7 +14,7 @@ let io;
 const initializeSocket = (server) => {
     io = socketIO(server, {
         cors: {
-            origin: ['http://localhost:8080', 'http://localhost:5173', 'http://localhost:3000'],
+            origin: config.server.corsOrigin,
             credentials: true,
             methods: ['GET', 'POST']
         },
@@ -39,7 +39,7 @@ const initializeSocket = (server) => {
                 `INSERT INTO user_presence (user_id, status, socket_id, last_seen_at)
                  VALUES ($1::UUID, 'online', $2, CURRENT_TIMESTAMP)
                  ON CONFLICT (user_id) 
-                 DO UPDATE SET status = 'online', socket_id = $2, last_seen_at = CURRENT_TIMESTAMP`,
+                 DO UPDATE SET status = 'online', socket_id = $2, last_seen_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP`,
                 [userId, socket.id]
             );
 
@@ -158,7 +158,7 @@ const initializeSocket = (server) => {
                 // Update presence back to online
                 await pool.query(
                     `UPDATE user_presence 
-                     SET status = 'online', socket_id = $1, last_seen_at = CURRENT_TIMESTAMP
+                     SET status = 'online', socket_id = $1, last_seen_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                      WHERE user_id = $2::UUID`,
                     [socket.id, userId]
                 );

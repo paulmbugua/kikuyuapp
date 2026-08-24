@@ -101,6 +101,12 @@ router.get('/:videoId/likers',
     uhoroController.getVideoLikers
 );
 
+router.post('/:videoId/share',
+    validateVideoId,
+    validate,
+    uhoroController.shareVideo
+);
+
 router.post('/:videoId/view',
     validateVideoId,
     validate,

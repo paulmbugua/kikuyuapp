@@ -2,29 +2,12 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
 const userController = require('./user.controller');
 const { protect, optionalAuth } = require('../../middleware/authMiddleware');
 const config = require('../../config/env');
-const fs = require('fs');
 
-// Ensure uploads directory exists
-const uploadDir = 'uploads/';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log('📁 Uploads directory created');
-}
-
-// Configure multer for temporary file storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Keep uploads in memory and stream them directly to Cloudflare R2.
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -44,7 +27,6 @@ const upload = multer({
 // PUBLIC ROUTES (no authentication)
 // =============================================
 router.get('/search', userController.searchUsers);
-router.get('/:username', optionalAuth, userController.getUserProfile);
 
 // =============================================
 // PROTECTED ROUTES (require authentication)
@@ -74,6 +56,9 @@ router.get('/activity', protect, userController.getUserActivity);
 
 // Mutual followers (specific route before generic param)
 router.get('/mutual/:targetUserId', protect, userController.getMutualFollowers);
+
+// Keep the username catch-all last so it cannot intercept specific routes.
+router.get('/:username', optionalAuth, userController.getUserProfile);
 
 console.log('✅ User routes registered successfully');
 

@@ -134,12 +134,16 @@ class PresenceModel {
     // Clean up stale presence records (run periodically)
     static async cleanupStalePresence() {
         const query = `
-            UPDATE user_presence 
-            SET status = 'offline',
-                socket_id = NULL
-            WHERE updated_at < NOW() - INTERVAL '5 minutes'
-                AND status != 'offline'
-            RETURNING COUNT(*) as updated_count
+            WITH updated AS (
+                UPDATE user_presence
+                SET status = 'offline',
+                    socket_id = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE updated_at < NOW() - INTERVAL '5 minutes'
+                    AND status != 'offline'
+                RETURNING 1
+            )
+            SELECT COUNT(*)::INTEGER AS updated_count FROM updated
         `;
 
         const result = await pool.query(query);

@@ -3,6 +3,7 @@ const TaxModel = require('./tax.model');
 const { AppError } = require('../../middleware/errorMiddleware');
 const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
+const pool = require('../../config/db');
 
 // Get all tax configs
 const getConfigs = catchAsync(async (req, res) => {

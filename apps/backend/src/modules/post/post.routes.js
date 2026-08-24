@@ -111,5 +111,6 @@ router.post('/:postId/comments',
   commentController.createComment  // Make sure this function exists
 );
 router.post('/:postId/view', protect, validatePostId, validate, postController.trackView);
+router.post('/:postId/share', validatePostId, validate, postController.sharePost);
 
 module.exports = router;

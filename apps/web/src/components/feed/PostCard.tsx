@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from '@/lib/navigation';
 import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, CheckCircle2, Eye, Sparkles, Send, Zap, Award, TrendingUp, ChevronLeft, ChevronRight, Play } from 'lucide-react';
-import { formatNumber } from '@/data/dummy';
+import { formatNumber } from '@/utils/format';
 import CommentSection from './CommentSection';
 import SupportTokenButton from './SupportTokenButton';
 import LiveReactions from './LiveReactions';
@@ -292,11 +292,11 @@ const PostCard = ({ post, onLike, onComment, onShare, onBookmark, onView }: Post
             onClick={handleProfileClick}
             className="shrink-0 relative group/avatar cursor-pointer"
           >
-            <img 
-              src={post.avatar_url || '/default-avatar.png'} 
-              alt={post.username} 
-              className="relative w-12 h-12 rounded-full object-cover ring-3 ring-primary/20 group-hover/avatar:ring-4 transition-all duration-300" 
-            />
+            {post.avatar_url ? <img
+              src={post.avatar_url}
+              alt={post.username}
+              className="relative w-12 h-12 rounded-full object-cover ring-3 ring-primary/20 group-hover/avatar:ring-4 transition-all duration-300"
+            /> : <span className="grid h-12 w-12 place-items-center rounded-full bg-muted font-bold ring-3 ring-primary/20">{post.username.slice(0, 1).toUpperCase()}</span>}
             {post.is_verified && (
               <div className="absolute -bottom-1 -right-1 bg-gradient-to-br from-primary to-accent rounded-full p-0.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-white" />

@@ -3,6 +3,7 @@ const PostModel = require('./post.model');
 const LikeModel = require('../like/like.model');
 const BookmarkModel = require('../bookmark/bookmark.model');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../../config/cloudinary');
+const { uploadImage, deleteImage } = require('../../config/r2');
 const { AppError } = require('../../middleware/errorMiddleware');
 const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
@@ -79,7 +80,9 @@ const createPost = catchAsync(async (req, res) => {
         uploadOptions.eager_async = true;
       }
       
-      mediaData = await uploadToCloudinary(req.file.path, uploadOptions);
+      mediaData = isVideo
+        ? await uploadToCloudinary(req.file.path, uploadOptions)
+        : await uploadImage(req.file, 'posts/images');
       
       console.log('Upload successful:', {
         url: mediaData.url,
@@ -209,8 +212,9 @@ const deletePost = catchAsync(async (req, res) => {
   
   const post = await PostModel.findById(postId);
   
-  if (post && post.media_public_id) {
-    deleteFromCloudinary(post.media_public_id).catch(console.error);
+  if (post?.media_public_id) {
+    const removeMedia = post.media_provider === 'cloudflare-r2' ? deleteImage : deleteFromCloudinary;
+    removeMedia(post.media_public_id).catch(console.error);
   }
   
   await PostModel.delete(postId, userId);
@@ -304,6 +308,15 @@ const trackView = catchAsync(async (req, res) => {
   ResponseHandler.success(res, { viewed: true }, 'View tracked');
 });
 
+const sharePost = catchAsync(async (req, res) => {
+  const { postId } = req.params;
+  const result = await pool.query(
+    'UPDATE posts SET shares_count = shares_count + 1 WHERE id = $1 AND is_active = true RETURNING shares_count',
+    [postId]
+  );
+  if (result.rows.length === 0) throw new AppError('Post not found', 404);
+  ResponseHandler.success(res, { shares_count: result.rows[0].shares_count }, 'Share tracked');
+});
 module.exports = {
   createPost,
   getPost,
@@ -316,4 +329,5 @@ module.exports = {
   getTrendingHashtags,
   pinPost,
   trackView,
+  sharePost,
 };

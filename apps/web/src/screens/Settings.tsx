@@ -131,11 +131,11 @@ const Settings = () => {
             {/* User Info in Modal */}
             {user && (
               <div className="mt-3 p-2 bg-muted/30 rounded-lg flex items-center gap-2">
-                <img 
-                  src={user.avatar_url || '/default-avatar.png'} 
+                {user.avatar_url ? <img
+                  src={user.avatar_url}
                   alt={user.username}
-                  className="w-6 h-6 rounded-full"
-                />
+                  className="h-6 w-6 rounded-full object-cover"
+                /> : <span className="grid h-6 w-6 place-items-center rounded-full bg-muted text-[10px] font-bold">{user.username.slice(0, 1).toUpperCase()}</span>}
                 <span className="text-xs text-muted-foreground">@{user.username}</span>
               </div>
             )}

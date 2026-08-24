@@ -3,6 +3,7 @@ const UhoroCommentModel = require('./uhoroComment.model');
 const { AppError } = require('../../middleware/errorMiddleware');
 const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
+const pool = require('../../config/db');
 const { moderateContent } = require('../../utils/contentModeration');
 
 // ==================== CREATE COMMENT ====================

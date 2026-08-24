@@ -11,13 +11,16 @@ const setupDailyJobs = () => {
             logger.debug('🧹 Running presence cleanup...');
             
             const result = await pool.query(`
-                UPDATE user_presence 
+            WITH updated AS (
+                UPDATE user_presence
                 SET status = 'offline',
                     socket_id = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE updated_at < NOW() - INTERVAL '5 minutes'
                     AND status != 'offline'
-                RETURNING COUNT(*) as updated_count
+                RETURNING 1
+            )
+            SELECT COUNT(*)::INTEGER AS updated_count FROM updated
             `);
 
             const cleaned = parseInt(result.rows[0]?.updated_count || 0);

@@ -4,8 +4,7 @@ const FollowModel = require('../follow/follow.model');
 const { AppError } = require('../../middleware/errorMiddleware');
 const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
-const { uploadToCloudinary } = require('../../config/cloudinary');
-const fs = require('fs').promises;
+const { uploadImage, deleteImage } = require('../../config/r2');
 const pool = require('../../config/db');
 
 // Get current authenticated user - FIXED with proper UUID casting
@@ -186,58 +185,34 @@ const updateProfile = catchAsync(async (req, res) => {
 
 // Upload avatar
 const uploadAvatar = catchAsync(async (req, res) => {
-  if (!req.file) {
-    throw new AppError('Please upload an image', 400);
-  }
+  if (!req.file) throw new AppError('Please upload an image', 400);
 
   const userId = req.user.id;
-
-  const result = await uploadToCloudinary(req.file.path, {
-    folder: 'rugano/avatars',
-    transformation: [
-      { width: 400, height: 400, crop: 'fill' },
-      { quality: 'auto' }
-    ]
-  });
-
+  const previous = await pool.query('SELECT avatar_key FROM users WHERE id = $1', [userId]);
+  const result = await uploadImage(req.file, 'users/avatars');
   const updatedUser = await UserModel.updateProfile(userId, {
-    avatar_url: result.url
+    avatar_url: result.url,
+    avatar_key: result.publicId
   });
 
-  await fs.unlink(req.file.path).catch(console.error);
-
-  ResponseHandler.success(res, { 
-    avatar_url: result.url,
-    user: updatedUser 
-  }, 'Avatar uploaded successfully');
+  if (previous.rows[0]?.avatar_key) deleteImage(previous.rows[0].avatar_key).catch(console.error);
+  ResponseHandler.success(res, { avatar_url: result.url, user: updatedUser }, 'Avatar uploaded successfully');
 });
 
 // Upload cover photo
 const uploadCover = catchAsync(async (req, res) => {
-  if (!req.file) {
-    throw new AppError('Please upload an image', 400);
-  }
+  if (!req.file) throw new AppError('Please upload an image', 400);
 
   const userId = req.user.id;
-
-  const result = await uploadToCloudinary(req.file.path, {
-    folder: 'rugano/covers',
-    transformation: [
-      { width: 1500, height: 500, crop: 'fill' },
-      { quality: 'auto' }
-    ]
-  });
-
+  const previous = await pool.query('SELECT cover_key FROM users WHERE id = $1', [userId]);
+  const result = await uploadImage(req.file, 'users/covers');
   const updatedUser = await UserModel.updateProfile(userId, {
-    cover_url: result.url
+    cover_url: result.url,
+    cover_key: result.publicId
   });
 
-  await fs.unlink(req.file.path).catch(console.error);
-
-  ResponseHandler.success(res, { 
-    cover_url: result.url,
-    user: updatedUser 
-  }, 'Cover photo uploaded successfully');
+  if (previous.rows[0]?.cover_key) deleteImage(previous.rows[0].cover_key).catch(console.error);
+  ResponseHandler.success(res, { cover_url: result.url, user: updatedUser }, 'Cover photo uploaded successfully');
 });
 
 // Get user suggestions

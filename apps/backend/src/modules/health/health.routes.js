@@ -5,6 +5,14 @@ const { pool } = require('../../config/db');
 const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
 
+router.get('/', (req, res) => {
+  ResponseHandler.success(res, {
+    status: 'OK',
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  }, 'Service healthy');
+});
+
 // Detailed health check
 router.get('/detailed', catchAsync(async (req, res) => {
   const startTime = Date.now();

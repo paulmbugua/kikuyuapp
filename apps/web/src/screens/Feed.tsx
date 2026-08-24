@@ -39,7 +39,7 @@ interface SponsoredAd {
   cta: string;
   advertiser: {
     name: string;
-    logo: string;
+    logo?: string;
   };
 }
 
@@ -267,19 +267,21 @@ const handleBookmark = async (postId: string, isBookmarked: boolean) => {
   // Fetch sponsored ads
   const fetchSponsoredAds = async () => {
     try {
-      const response = await axiosInstance.get('/promotion/active');
+      const response = await axiosInstance.get('/promotions/active');
       const ads = response.data.data.promotions || [];
       
-      const formattedAds = ads.map((ad: any) => ({
+      const formattedAds = ads
+        .filter((ad: any) => ad.content_data?.media_url || ad.content_data?.thumbnail_url)
+        .map((ad: any) => ({
         id: ad.id,
         title: ad.content_data?.title || 'Sponsored Content',
         description: ad.content_data?.content || '',
-        image: ad.content_data?.media_url || ad.content_data?.thumbnail_url || '/default-ad-image.jpg',
+        image: ad.content_data.media_url || ad.content_data.thumbnail_url,
         videoUrl: ad.content_data?.video_url || null,
         cta: ad.content_data?.cta_text || 'Learn More',
         advertiser: {
           name: ad.full_name || 'Sponsor',
-          logo: ad.avatar_url || '/default-avatar.png'
+          logo: ad.avatar_url || undefined
         }
       }));
       
@@ -608,7 +610,7 @@ const handleBookmark = async (postId: string, isBookmarked: boolean) => {
               <div className="flex items-center gap-3 mb-6 bg-white/5 backdrop-blur-xl rounded-2xl p-3 border border-white/10">
                 <div className="relative">
                   <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary to-accent blur-md opacity-50" />
-                  <img src={currentAd.advertiser.logo} alt="" className="relative w-12 h-12 rounded-full object-cover border-2 border-white/20" />
+                  {currentAd.advertiser.logo ? <img src={currentAd.advertiser.logo} alt={currentAd.advertiser.name} className="relative h-12 w-12 rounded-full border-2 border-white/20 object-cover" /> : <span className="relative grid h-12 w-12 place-items-center rounded-full border-2 border-white/20 bg-black/40 font-bold text-white">{currentAd.advertiser.name.slice(0, 1).toUpperCase()}</span>}
                 </div>
                 <div className="flex-1">
                   <p className="text-white font-heading font-bold text-sm">{currentAd.advertiser.name}</p>

@@ -69,7 +69,7 @@ const Promote = () => {
   const fetchPlans = async () => {
     setLoadingPlans(true);
     try {
-      const response = await axiosInstance.get('/promotion/plans');
+      const response = await axiosInstance.get('/promotions/plans');
       setPlans(response.data.data.plans);
       if (response.data.data.plans.length > 0) {
         setSelectedPlan(response.data.data.plans[0]);
@@ -85,7 +85,7 @@ const Promote = () => {
   const fetchMyPromotions = async () => {
     setLoadingPromotions(true);
     try {
-      const response = await axiosInstance.get('/promotion/my-promotions?status=all');
+      const response = await axiosInstance.get('/promotions/my-promotions?status=all');
       const promoData = response.data.data.promotions;
       setPromotions(promoData);
       
@@ -114,7 +114,7 @@ const Promote = () => {
     
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('media', file);
       formData.append('type', mediaType);
       
       const response = await axiosInstance.post('/upload/promotion-media', formData, {
@@ -122,7 +122,7 @@ const Promote = () => {
       });
       
       toast.success('Media uploaded successfully!', { id: toastId });
-      return response.data.data.url;
+      return response.data.data.media_url;
     } catch (error) {
       console.error('Error uploading file:', error);
       toast.error('Failed to upload media', { id: toastId });
@@ -167,14 +167,14 @@ const Promote = () => {
       }
 
       const endpoint = paymentMethod === 'tokens' 
-        ? '/promotion/create/tokens' 
-        : '/promotion/create/mpesa';
+        ? '/promotions/create/tokens'
+        : '/promotions/create/mpesa';
       
       const payload: any = {
         planId: selectedPlan.id,
         content: {
-          contentType: 'post',
-          contentId: 'temp-' + Date.now(), // You'd replace with actual post ID after creation
+          contentType: 'profile',
+          contentId: user?.id,
           title: title,
           description: description,
           cta_text: cta,
@@ -219,7 +219,7 @@ const Promote = () => {
     const toastId = toast.loading('Cancelling promotion...');
     
     try {
-      await axiosInstance.delete(`/promotion/${promotionId}/cancel`);
+      await axiosInstance.delete(`/promotions/${promotionId}/cancel`);
       toast.success('Promotion cancelled successfully', { id: toastId });
       await fetchMyPromotions();
     } catch (error: any) {

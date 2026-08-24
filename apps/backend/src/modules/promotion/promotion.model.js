@@ -73,13 +73,13 @@ class PromotionModel {
             // Create promotion record
             const promotionResult = await client.query(
                 `INSERT INTO promoted_content (
-                    user_id, plan_id, content_type, content_id,
+                    user_id, plan_id, content_type, content_id, content_data,
                     started_at, ends_at, target_impressions,
                     amount_paid, payment_method, audience_targeting
-                ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5, $6, $7, 'mpesa', $8)
+                ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6, $7, $8, 'mpesa', $9)
                 RETURNING *`,
                 [
-                    userId, planId, content.contentType, content.contentId,
+                    userId, planId, content.contentType, content.contentId, content,
                     endsAt, plan.target_impressions,
                     plan.price_kes, content.audience_targeting || null
                 ]
@@ -150,13 +150,13 @@ class PromotionModel {
             // Create promotion record
             const promotionResult = await client.query(
                 `INSERT INTO promoted_content (
-                    user_id, plan_id, content_type, content_id,
+                    user_id, plan_id, content_type, content_id, content_data,
                     started_at, ends_at, target_impressions,
                     token_amount_used, payment_method, audience_targeting
-                ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5, $6, $7, 'tokens', $8)
+                ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6, $7, $8, 'tokens', $9)
                 RETURNING *`,
                 [
-                    userId, planId, content.contentType, content.contentId,
+                    userId, planId, content.contentType, content.contentId, content,
                     endsAt, plan.target_impressions,
                     plan.token_price, content.audience_targeting || null
                 ]
@@ -420,145 +420,8 @@ class PromotionModel {
     }
 
     // Get all active promotions (for feed)
+    // Feed, cancellation, administration and statistics
     static async getActivePromotions(limit = 10) {
-        const query = `
-            SELECT 
-                p.*,
-                u.username, u.full_name, u.avatar_url, u.is_verified,
-                CASE 
-                    WHEN p.content_type = 'post' THEN
-                        (SELECT json_build_object('content', content, 'media_url', media_url)
-                         FROM posts WHERE id = p.content_id)
-                    WHEN p.content_type = 'uhoro' THEN
-                        (SELECT json_build_object('title', title, 'video_url', video_url, 'thumbnail_url', thumbnail_url)
-                         FROM uhoro_videos WHERE id = p.content_id)
-                    ELSE NULL
-                END as content_data
-            FROM promoted_content p
-            JOIN users u ON p.user_id = u.id
-            WHERE p.is_active = true 
-                AND p.ends_at > NOW()
-                AND p.current_impressions < p.target_impressions
-            ORDER BY p.created_at DESC
-            LIMIT $1
-        `;
-
-        const result = await pool.query(query, [limit]);
-        return result.rows;
-    }
-
-    // Cancel promotion
-    static async cancelPromotion(promotionId, userId) {
-        const query = `
-            UPDATE promoted_content 
-            SET is_active = false,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1 AND user_id = $2 AND is_active = true
-            RETURNING *
-        `;
-
-        const result = await pool.query(query, [promotionId, userId]);
-
-        if (result.rows.length === 0) {
-            throw new AppError('Promotion not found or already ended', 404);
-        }
-
-        return result.rows[0];
-    }
-
-    // Admin: Get all promotions
-    static async getAllPromotions(filters = {}, limit = 50, offset = 0) {
-        let query = `
-            SELECT 
-                p.*,
-                u.username,
-                u.email,
-                prom.name as plan_name
-            FROM promoted_content p
-            JOIN users u ON p.user_id = u.id
-            JOIN promotion_plans prom ON p.plan_id = prom.id
-            WHERE 1=1
-        `;
-
-        const values = [];
-        const conditions = [];
-
-        if (filters.user_id) {
-            conditions.push(`p.user_id = $${values.length + 1}`);
-            values.push(filters.user_id);
-        }
-
-        if (filters.status === 'active') {
-            conditions.push(`p.is_active = true AND p.ends_at > NOW()`);
-        } else if (filters.status === 'completed') {
-            conditions.push(`(p.ends_at <= NOW() OR p.is_active = false)`);
-        }
-
-        if (conditions.length > 0) {
-            query += ' AND ' + conditions.join(' AND ');
-        }
-
-        query += ` ORDER BY p.created_at DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
-        values.push(limit, offset);
-
-        const result = await pool.query(query, values);
-
-        // Get total count
-        let countQuery = 'SELECT COUNT(*) FROM promoted_content p';
-        if (filters.user_id) {
-            countQuery += ' WHERE user_id = $1';
-        }
-        const countResult = await pool.query(
-            countQuery, 
-            filters.user_id ? [filters.user_id] : []
-        );
-        const total = parseInt(countResult.rows[0].count);
-
-        return {
-            promotions: result.rows,
-            total
-        };
-    }
-
-    // Get promotion statistics
-    static async getStats() {
-        const query = `
-            SELECT
-                COUNT(*) as total_promotions,
-                COUNT(CASE WHEN is_active AND ends_at > NOW() THEN 1 END) as active_promotions,
-                COALESCE(SUM(amount_paid), 0) as total_revenue,
-                COALESCE(SUM(current_impressions), 0) as total_impressions,
-                COALESCE(SUM(current_clicks), 0) as total_clicks,
-                AVG(ctr) as avg_ctr,
-                COUNT(DISTINCT user_id) as unique_advertisers
-            FROM promoted_content
-            WHERE created_at > NOW() - INTERVAL '30 days'
-        `;
-
-        const result = await pool.query(query);
-        
-        // Get performance by plan
-        const planPerformance = await pool.query(`
-            SELECT 
-                prom.name,
-                COUNT(p.id) as usage_count,
-                AVG(p.ctr) as avg_ctr,
-                SUM(p.current_impressions) as total_impressions
-            FROM promoted_content p
-            JOIN promotion_plans prom ON p.plan_id = prom.id
-            GROUP BY prom.id, prom.name
-            ORDER BY usage_count DESC
-        `);
-
-        return {
-            summary: result.rows[0],
-            plan_performance: planPerformance.rows
-        };
-    }
-    // Add these missing methods to your promotion.model.js
-
-// Get all active promotions (for feed)
-static async getActivePromotions(limit = 10) {
     const query = `
         SELECT 
             p.*,

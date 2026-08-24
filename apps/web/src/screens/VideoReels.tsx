@@ -1,15 +1,29 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from '@/lib/navigation';
 import {
-  ArrowLeft, Heart, MessageCircle, Share2, Bookmark, Download,
+  ArrowLeft, Heart, MessageCircle, Share2, Download,
   CheckCircle2, Music2, Play, Pause, Volume2, VolumeX,
   Maximize2, Minimize2, X, MoreHorizontal, UserPlus, TrendingUp,
   Sparkles, Clock, Send, ThumbsUp, ChevronUp, ChevronDown,
   Repeat, Info, Share as ShareIcon, Flag, Copy, Twitter, Instagram,
   Link as LinkIcon, MessageSquare,
 } from 'lucide-react';
-import { reels, type Reel } from '@/data/reels';
-import { formatNumber } from '@/data/dummy';
+import axiosInstance from '@/utils/axiosConfig';
+import { formatNumber } from '@/utils/format';
+import AppRightSidebar from '@/components/layout/RightSidebar';
+
+interface Reel {
+  id: string;
+  user: { id: string; username: string; handle: string; avatar: string; verified: boolean; followers: number };
+  videoUrl: string;
+  caption: string;
+  likes: number;
+  comments: number;
+  shares: number;
+  views: number;
+  liked: boolean;
+  music?: string;
+}
 import SupportTokenButton from '@/components/feed/SupportTokenButton';
 import DesktopSidebar from '@/components/layout/DesktopSidebar';
 
@@ -137,7 +151,10 @@ const ReelCard = ({ reel, isActive, onBack }: ReelCardProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [liked, setLiked] = useState(reel.liked);
   const [likeCount, setLikeCount] = useState(reel.likes);
-  const [bookmarked, setBookmarked] = useState(reel.bookmarked);
+  const [following, setFollowing] = useState(false);
+  const [shareCount, setShareCount] = useState(reel.shares);
+  const [commentCount, setCommentCount] = useState(reel.comments);
+  const [commentsLoaded, setCommentsLoaded] = useState(false);
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false); // Default unmuted for better UX
   const [progress, setProgress] = useState(0);
@@ -169,13 +186,68 @@ const ReelCard = ({ reel, isActive, onBack }: ReelCardProps) => {
     return () => v.removeEventListener('timeupdate', update);
   }, []);
 
+  const toggleLike = useCallback(async () => {
+    const nextLiked = !liked;
+    setLiked(nextLiked);
+    setLikeCount((count) => Math.max(0, count + (nextLiked ? 1 : -1)));
+    try {
+      if (nextLiked) await axiosInstance.post(`/uhoro/${reel.id}/like`);
+      else await axiosInstance.delete(`/uhoro/${reel.id}/unlike`);
+    } catch (error) {
+      setLiked(!nextLiked);
+      setLikeCount((count) => Math.max(0, count + (nextLiked ? -1 : 1)));
+      console.error('Unable to persist video like:', error);
+    }
+  }, [liked, reel.id]);
+
+  const toggleFollow = async () => {
+    const nextFollowing = !following;
+    setFollowing(nextFollowing);
+    try {
+      if (nextFollowing) await axiosInstance.post(`/follows/${reel.user.id}`);
+      else await axiosInstance.delete(`/follows/${reel.user.id}`);
+    } catch (error) {
+      setFollowing(!nextFollowing);
+      console.error('Unable to persist follow:', error);
+    }
+  };
+
+  const openComments = async () => {
+    const opening = !showComments;
+    setShowComments(opening);
+    if (!opening || commentsLoaded) return;
+    try {
+      const { data } = await axiosInstance.get(`/uhoro/${reel.id}/comments?sort=popular&limit=50`);
+      const comments = Array.isArray(data.data) ? data.data : [];
+      setCommentsList(comments.map((comment: any) => ({
+        id: comment.id,
+        username: comment.full_name || comment.username,
+        handle: `@${comment.username}`,
+        text: comment.content,
+        likes: Number(comment.likes_count || 0),
+        timestamp: new Date(comment.created_at)
+      })));
+      setCommentCount(Number(data.pagination?.total || comments.length));
+      setCommentsLoaded(true);
+    } catch (error) {
+      console.error('Unable to load comments:', error);
+    }
+  };
+
+  const handleShare = async () => {
+    setShowShareModal(true);
+    try {
+      const { data } = await axiosInstance.post(`/uhoro/${reel.id}/share`);
+      setShareCount(Number(data.data?.shares_count || shareCount + 1));
+    } catch (error) {
+      console.error('Unable to record share:', error);
+    }
+  };
+
   const handleTap = useCallback(() => {
     const now = Date.now();
     if (now - lastTap.current < 300) {
-      if (!liked) {
-        setLiked(true);
-        setLikeCount(c => c + 1);
-      }
+      if (!liked) void toggleLike();
       setShowHeart(true);
       setTimeout(() => setShowHeart(false), 800);
     } else {
@@ -186,7 +258,7 @@ const ReelCard = ({ reel, isActive, onBack }: ReelCardProps) => {
       }, 300);
     }
     lastTap.current = now;
-  }, [liked]);
+  }, [liked, toggleLike]);
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
@@ -196,18 +268,25 @@ const ReelCard = ({ reel, isActive, onBack }: ReelCardProps) => {
     v.currentTime = pct * v.duration;
   };
 
-  const handleComment = () => {
-    if (!commentText.trim()) return;
-    const newComment = {
-      id: Date.now().toString(),
-      username: 'Current User',
-      handle: '@current_user',
-      text: commentText,
-      likes: 0,
-      timestamp: new Date(),
-    };
-    setCommentsList(prev => [newComment, ...prev]);
-    setCommentText('');
+  const handleComment = async () => {
+    const content = commentText.trim();
+    if (!content) return;
+    try {
+      const { data } = await axiosInstance.post(`/uhoro/${reel.id}/comments`, { content });
+      const comment = data.data.comment;
+      setCommentsList((current) => [{
+        id: comment.id,
+        username: comment.full_name || comment.username,
+        handle: `@${comment.username}`,
+        text: comment.content,
+        likes: Number(comment.likes_count || 0),
+        timestamp: new Date(comment.created_at)
+      }, ...current]);
+      setCommentCount((count) => count + 1);
+      setCommentText('');
+    } catch (error) {
+      console.error('Unable to publish comment:', error);
+    }
   };
 
   return (
@@ -308,26 +387,25 @@ const ReelCard = ({ reel, isActive, onBack }: ReelCardProps) => {
         {/* Profile */}
         <div className="relative group cursor-pointer" onClick={() => navigate(`/profile/${reel.user.id}`)}>
           <div className="absolute -inset-0.5 bg-gradient-to-tr from-accent via-primary to-secondary rounded-full opacity-0 group-hover:opacity-100 blur-md transition-opacity duration-300" />
-          <img 
-            src={reel.user.avatar} 
-            alt="" 
-            className="relative w-12 h-12 rounded-full object-cover ring-2 ring-white/30 group-hover:scale-105 transition-transform duration-200" 
-          />
+          {reel.user.avatar ? <img
+            src={reel.user.avatar}
+            alt={reel.user.username}
+            className="relative h-12 w-12 rounded-full object-cover ring-2 ring-white/30 transition-transform duration-200 group-hover:scale-105"
+          /> : <span className="relative grid h-12 w-12 place-items-center rounded-full bg-black font-bold text-white ring-2 ring-white/30">{reel.user.username.slice(0, 1).toUpperCase()}</span>}
           <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center shadow-lg">
             <UserPlus className="w-3 h-3 text-white" />
           </div>
         </div>
 
-        <ActionButton icon={Heart} count={likeCount} active={liked} onClick={() => setLiked(!liked)} activeColor="text-rose-500" />
-        <ActionButton icon={MessageCircle} count={reel.comments + commentsList.length} onClick={() => setShowComments(!showComments)} />
-        <ActionButton icon={Share2} count={reel.shares} onClick={() => setShowShareModal(true)} />
-        <ActionButton icon={Bookmark} active={bookmarked} onClick={() => setBookmarked(!bookmarked)} activeColor="text-gold" />
+        <ActionButton icon={Heart} count={likeCount} active={liked} onClick={() => void toggleLike()} activeColor="text-rose-500" />
+        <ActionButton icon={MessageCircle} count={commentCount} onClick={() => void openComments()} />
+        <ActionButton icon={Share2} count={shareCount} onClick={() => void handleShare()} />
 
         {/* Music Disc */}
         <div className="relative group cursor-pointer">
           <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary to-accent blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="relative w-11 h-11 rounded-full border-2 border-white/40 overflow-hidden animate-spin-slow shadow-lg">
-            <img src={reel.user.avatar} alt="" className="w-full h-full object-cover" />
+            {reel.user.avatar ? <img src={reel.user.avatar} alt={reel.user.username} className="h-full w-full object-cover" /> : <span className="grid h-full w-full place-items-center bg-black text-xs font-bold text-white">{reel.user.username.slice(0, 1).toUpperCase()}</span>}
           </div>
         </div>
       </div>
@@ -342,8 +420,8 @@ const ReelCard = ({ reel, isActive, onBack }: ReelCardProps) => {
             </span>
             {reel.user.verified && <CheckCircle2 className="w-4 h-4 text-primary" />}
             <span className="text-white/50 text-xs">{reel.user.handle}</span>
-            <button className="ml-2 px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition-all backdrop-blur-sm">
-              Follow
+            <button onClick={() => void toggleFollow()} className="ml-2 px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition-all backdrop-blur-sm">
+              {following ? 'Following' : 'Follow'}
             </button>
           </div>
           
@@ -419,7 +497,7 @@ const ReelCard = ({ reel, isActive, onBack }: ReelCardProps) => {
             <div className="flex items-center gap-2">
               <MessageCircle className="w-5 h-5 text-primary" />
               <h3 className="text-white font-semibold">Comments</h3>
-              <span className="text-white/50 text-xs">({reel.comments + commentsList.length})</span>
+              <span className="text-white/50 text-xs">({commentCount})</span>
             </div>
             <button onClick={() => setShowComments(false)} className="p-2 hover:bg-white/10 rounded-full transition-all">
               <X className="w-5 h-5 text-white/60" />
@@ -483,193 +561,52 @@ const ReelCard = ({ reel, isActive, onBack }: ReelCardProps) => {
 };
 
 // ============================================================================
-// RIGHT SIDEBAR (Trending & Creators)
-// ============================================================================
-const RightSidebar = () => {
-  const [activeTab, setActiveTab] = useState<'trending' | 'creators'>('trending');
-
-  const trendingTopics = useMemo(() => [
-    { tag: '#ThuthaVibes', posts: '12.4K', category: 'Music', trend: '+47%', icon: TrendingUp },
-    { tag: '#KikuyuCulture', posts: '8.2K', category: 'Culture', trend: '+32%', icon: Sparkles },
-    { tag: '#AgikuyuPride', posts: '6.1K', category: 'Community', trend: '+28%', icon: Heart },
-    { tag: '#KenyanMusic', posts: '5.4K', category: 'Music', trend: '+21%', icon: Music2 },
-    { tag: '#ThuthaStories', posts: '4.8K', category: 'Story', trend: '+18%', icon: Clock },
-  ], []);
-
-  const creators = useMemo(() => [
-    { name: 'Wanjiku Karanja', handle: '@wanjiku_k', followers: '45.2K', avatar: '', isVerified: true, category: 'Storyteller' },
-    { name: 'Mbugua Mwangi', handle: '@mbugua_m', followers: '32.1K', avatar: '', isVerified: false, category: 'Comedy' },
-    { name: 'Nyokabi Gachoka', handle: '@nyokabi_g', followers: '28.7K', avatar: '', isVerified: true, category: 'Music' },
-    { name: 'Kamau Njoroge', handle: '@kamau_n', followers: '21.3K', avatar: '', isVerified: false, category: 'Education' },
-    { name: 'Wambui Kimani', handle: '@wambui_k', followers: '18.9K', avatar: '', isVerified: false, category: 'Food' },
-  ], []);
-
-  return (
-    <aside className="hidden xl:block w-96 fixed right-0 top-0 bottom-0 bg-gradient-to-b from-gray-900 to-black overflow-y-auto no-scrollbar border-l border-white/10">
-      <div className="sticky top-0 bg-black/80 backdrop-blur-xl z-10 px-6 pt-8 pb-4 border-b border-white/10">
-        <div className="flex gap-2 p-1 bg-white/5 rounded-xl mb-4">
-          {[
-            { id: 'trending', label: 'Trending', icon: TrendingUp },
-            { id: 'creators', label: 'Creators', icon: UserPlus },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all duration-200 ${
-                activeTab === tab.id
-                  ? 'bg-gradient-to-r from-primary/20 to-primary/10 text-primary font-semibold'
-                  : 'text-white/40 hover:text-white/60'
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              <span className="text-sm font-medium">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Proverb Card */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-5 border border-primary/20">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="w-4 h-4 text-primary" />
-              <span className="text-primary font-semibold uppercase tracking-wider text-xs">
-                Proverb of the Day
-              </span>
-            </div>
-            <h3 className="text-white text-xl font-bold italic mb-2 leading-relaxed">
-              "Mũndũ ũtathiĩ nĩ aũragwo nĩ ngʼombe."
-            </h3>
-            <p className="text-white/60 text-sm">
-              "One who does not travel is killed by cows." — Embrace exploration and new experiences.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-6 py-6">
-        {activeTab === 'trending' ? (
-          <div className="space-y-4">
-            {trendingTopics.map((topic, i) => {
-              const Icon = topic.icon;
-              return (
-                <div
-                  key={i}
-                  className="group relative p-3 rounded-xl hover:bg-white/5 transition-all duration-200 cursor-pointer"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center group-hover:scale-105 transition-transform">
-                      <Icon className="w-6 h-6 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-white font-semibold text-base">
-                          {topic.tag}
-                        </h4>
-                        <span className="text-[10px] font-semibold text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">
-                          {topic.trend}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-white/50 text-xs">{topic.posts} posts</span>
-                        <span className="w-1 h-1 rounded-full bg-white/30" />
-                        <span className="text-white/50 text-xs">{topic.category}</span>
-                      </div>
-                    </div>
-                    <div className="text-2xl font-bold text-white/10 group-hover:text-white/20 transition-colors">
-                      {String(i + 1).padStart(2, '0')}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {creators.map((creator, i) => (
-              <div
-                key={i}
-                className="group p-3 rounded-xl hover:bg-white/5 transition-all duration-200 cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent p-[2px]">
-                      <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
-                        <span className="text-white font-bold text-lg">
-                          {creator.name[0]}
-                        </span>
-                      </div>
-                    </div>
-                    {creator.isVerified && (
-                      <CheckCircle2 className="absolute -bottom-0.5 -right-0.5 w-4 h-4 text-primary fill-black" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h4 className="text-white font-semibold text-sm">
-                        {creator.name}
-                      </h4>
-                      {creator.isVerified && <CheckCircle2 className="w-3.5 h-3.5 text-primary" />}
-                    </div>
-                    <span className="text-white/50 text-xs">{creator.handle}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-primary text-xs font-medium">{creator.followers}</span>
-                      <span className="w-1 h-1 rounded-full bg-white/30" />
-                      <span className="text-white/50 text-xs">{creator.category}</span>
-                    </div>
-                  </div>
-                  <button className="px-4 py-1.5 rounded-full bg-primary/20 hover:bg-primary/30 text-primary text-xs font-semibold transition-all duration-200">
-                    Follow
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Sponsored Card */}
-        <div className="mt-8 pt-6 border-t border-white/10">
-          <div className="rounded-2xl bg-gradient-to-br from-white/5 to-white/0 p-5 border border-white/10">
-            <span className="text-white/40 uppercase tracking-wider text-[10px] mb-3 block">
-              Sponsored
-            </span>
-            <h4 className="text-white font-semibold mb-2">
-              Reach 1M+ Agĩkũyũ users
-            </h4>
-            <p className="text-white/60 text-sm mb-4">
-              Promote your brand with Thutha Ads and connect with Kenya's most vibrant community.
-            </p>
-            <button className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-white text-sm font-semibold hover:shadow-lg hover:shadow-primary/20 transition-all duration-200">
-              Start Promoting →
-            </button>
-          </div>
-        </div>
-      </div>
-    </aside>
-  );
-};
-
-// ============================================================================
 // MAIN VIDEO REELS PAGE
 // ============================================================================
 const VideoReels = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const startId = searchParams.get('start');
-  const [activeIndex, setActiveIndex] = useState(() => {
-    if (startId) {
-      const idx = reels.findIndex(r => r.id === startId);
-      return idx >= 0 ? idx : 0;
-    }
-    return 0;
-  });
+  const [reels, setReels] = useState<Reel[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [loadingReels, setLoadingReels] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    void axiosInstance.get('/uhoro/feed?type=for-you&limit=20').then(({ data }) => {
+      const videos = Array.isArray(data.data) ? data.data : [];
+      const liveReels: Reel[] = videos.map((video: any) => ({
+        id: video.id,
+        user: {
+          id: video.user_id,
+          username: video.full_name || video.username,
+          handle: `@${video.username}`,
+          avatar: video.avatar_url || '',
+          verified: Boolean(video.is_verified),
+          followers: Number(video.followers_count || 0)
+        },
+        videoUrl: video.video_url,
+        caption: video.description || video.title || '',
+        likes: Number(video.likes_count || 0),
+        comments: Number(video.comments_count || 0),
+        shares: Number(video.shares_count || 0),
+        views: Number(video.views_count || 0),
+        liked: Boolean(video.liked || video.is_liked),
+        music: video.audio_title || undefined
+      }));
+      setReels(liveReels);
+      if (startId) {
+        const index = liveReels.findIndex((reel) => reel.id === startId);
+        if (index >= 0) setActiveIndex(index);
+      }
+    }).finally(() => setLoadingReels(false));
+  }, [startId]);
 
   useEffect(() => {
     if (containerRef.current && activeIndex > 0) {
       containerRef.current.children[activeIndex]?.scrollIntoView({ behavior: 'instant' as any });
     }
-  }, []);
+  }, [activeIndex]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -689,7 +626,7 @@ const VideoReels = () => {
 
     Array.from(container.children).forEach(child => observer.observe(child));
     return () => observer.disconnect();
-  }, []);
+  }, [reels.length]);
 
   return (
     <div className="flex min-h-screen bg-black">
@@ -702,6 +639,8 @@ const VideoReels = () => {
             className="relative w-full h-full snap-y snap-mandatory overflow-y-auto no-scrollbar rounded-2xl"
             style={{ scrollBehavior: 'smooth' }}
           >
+            {loadingReels && <div className="grid h-full place-items-center text-sm text-white/60">Loading community videos…</div>}
+            {!loadingReels && reels.length === 0 && <div className="grid h-full place-items-center px-8 text-center text-sm text-white/60">No community videos have been published yet.</div>}
             {reels.map((reel, index) => (
               <ReelCard
                 key={reel.id}
@@ -714,7 +653,7 @@ const VideoReels = () => {
         </div>
       </div>
 
-      <RightSidebar />
+      <AppRightSidebar />
     </div>
   );
 };

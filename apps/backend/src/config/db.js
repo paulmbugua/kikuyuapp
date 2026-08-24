@@ -41,6 +41,8 @@ const testConnection = async () => {
 module.exports = {
   pool,
   query: (text, params) => pool.query(text, params),
+  connect: () => pool.connect(),
+  end: () => pool.end(),
   testConnection,
   
   // Transaction helper

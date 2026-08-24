@@ -36,6 +36,7 @@ const userRoutes = require('./modules/user/user.routes');
 const followRoutes = require('./modules/follow/follow.routes');
 const notificationRoutes = require('./modules/notification/notification.routes');
 const ruganoRoutes = require('./modules/rugano/rugano.routes');
+const uploadRoutes = require('./modules/upload/upload.routes');
 
 logger.info('✅ All route modules loaded successfully');
 
@@ -51,35 +52,14 @@ app.use(helmet({
 // =============================================
 // CORS Configuration
 // =============================================
-if (process.env.NODE_ENV !== 'production') {
-  app.use(cors({
-    origin: true,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
-  }));
-} else {
-  const allowedOrigins = [
-    'http://localhost:8080',
-    'http://localhost:3000', 
-    'http://localhost:5173',
-    'https://your-production-domain.com'
-  ];
-  
-  app.use(cors({
-    origin: function(origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
-  }));
-}
+app.use(cors({
+  origin: config.isProduction
+    ? (origin, callback) => callback(null, !origin || config.server.corsOrigin.includes(origin))
+    : true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+}));
 
 // =============================================
 // Body Parsing Middleware
@@ -154,6 +134,7 @@ app.use(`${apiPrefix}/reports`, reportsRoutes);
 app.use(`${apiPrefix}/payments`, paymentRoutes);
 app.use(`${apiPrefix}/notifications`, notificationRoutes);
 app.use(`${apiPrefix}/rugano`, ruganoRoutes);
+app.use(`${apiPrefix}/upload`, uploadRoutes);
 
 // Log all mounted routes
 if (config.isDevelopment) {

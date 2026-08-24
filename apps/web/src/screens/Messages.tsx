@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from '@/lib/navigation';
 import { Send, Search, Phone, Video, ArrowLeft, PhoneOff, PhoneIncoming, MoreVertical, Mic, Image, Smile, Check, CheckCheck, X, Loader2, MessageCircle, UserPlus, UserCheck, ChevronLeft, Paperclip } from 'lucide-react';
 import { useUserStore } from '@/stores/userStore';
 import { toast } from 'sonner';
-import axiosInstance from '@/utils/axiosConfig';
+import axiosInstance, { backendOrigin } from '@/utils/axiosConfig';
 import { formatDistanceToNow } from 'date-fns';
 import { io, Socket } from 'socket.io-client';
 
@@ -91,7 +91,7 @@ const Messages = () => {
       return;
     }
     
-    const socketInstance = io('http://localhost:5000', {
+    const socketInstance = io(backendOrigin, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,

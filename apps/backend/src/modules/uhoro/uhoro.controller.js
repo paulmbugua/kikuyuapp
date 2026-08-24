@@ -3,12 +3,14 @@ const UhoroModel = require('./uhoro.model');
 const UhoroLikeModel = require('../uhoroLike/uhoroLike.model');
 const UhoroViewModel = require('../uhoroView/uhoroView.model');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../../config/cloudinary');
+const { uploadImage, deleteImage } = require('../../config/r2');
 const { validateUhoroVideo, generateThumbnail, extractMetadata } = require('../../utils/videoProcessor');
 const { AppError } = require('../../middleware/errorMiddleware');
 const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
 const fs = require('fs').promises;
 const path = require('path');
+const pool = require('../../config/db');
 
 // Upload new video
 const uploadVideo = catchAsync(async (req, res) => {
@@ -26,6 +28,8 @@ const uploadVideo = catchAsync(async (req, res) => {
     const thumbnailPath = path.join('uploads', `thumb_${Date.now()}.jpg`);
     await generateThumbnail(req.file.path, thumbnailPath);
 
+    const metadata = await extractMetadata(req.file.path);
+
     // Upload video to Cloudinary
     const videoResult = await uploadToCloudinary(req.file.path, {
         folder: 'rugano/uhoro/videos',
@@ -36,21 +40,19 @@ const uploadVideo = catchAsync(async (req, res) => {
         ]
     });
 
-    // Upload thumbnail to Cloudinary
-    const thumbnailResult = await uploadToCloudinary(thumbnailPath, {
-        folder: 'rugano/uhoro/thumbnails',
-        transformation: [
-            { width: 720, height: 1280, crop: 'fill' },
-            { quality: 'auto', fetch_format: 'auto' }
-        ]
-    });
+    // Store the displayed thumbnail directly in Cloudflare R2.
+    const thumbnailStat = await fs.stat(thumbnailPath);
+    const thumbnailResult = await uploadImage({
+        path: thumbnailPath,
+        originalname: path.basename(thumbnailPath),
+        mimetype: 'image/jpeg',
+        size: thumbnailStat.size
+    }, 'uhoro/thumbnails');
 
     // Clean up temporary files
     await fs.unlink(req.file.path).catch(console.error);
     await fs.unlink(thumbnailPath).catch(console.error);
 
-    // Get video metadata
-    const metadata = await extractMetadata(req.file.path);
 
     // Create video record
     const video = await UhoroModel.create(userId, {
@@ -167,7 +169,7 @@ const deleteVideo = catchAsync(async (req, res) => {
         deleteFromCloudinary(result.video_public_id).catch(console.error);
     }
     if (result.thumbnail_public_id) {
-        deleteFromCloudinary(result.thumbnail_public_id).catch(console.error);
+        deleteImage(result.thumbnail_public_id).catch(console.error);
     }
 
     ResponseHandler.success(res, null, 'Video deleted successfully');
@@ -228,6 +230,20 @@ const getVideoLikers = catchAsync(async (req, res) => {
     const total = parseInt(countResult.rows[0].count);
 
     ResponseHandler.paginated(res, likers, page, limit, total);
+});
+
+// Record an explicit share action
+const shareVideo = catchAsync(async (req, res) => {
+    const { videoId } = req.params;
+    const result = await pool.query(
+        `UPDATE uhoro_videos
+         SET shares_count = shares_count + 1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND is_active = true
+         RETURNING shares_count`,
+        [videoId]
+    );
+    if (!result.rows[0]) throw new AppError('Video not found', 404);
+    ResponseHandler.success(res, { shares_count: result.rows[0].shares_count }, 'Video share recorded');
 });
 
 // Record video view
@@ -313,6 +329,7 @@ module.exports = {
     unlikeVideo,
     getVideoLikers,
     recordView,
+    shareVideo,
     getTrendingHashtags,
     getVideosByHashtag,
     getVideoAnalytics,

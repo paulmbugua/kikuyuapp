@@ -3,7 +3,7 @@ const pool = require('../../config/db');
 
 class UserModel {
   static async findOrCreateFromGoogle(googleUser) {
-    const { sub, email, name, picture, emailVerified } = googleUser;
+    const { sub, email, name, picture, pictureKey, emailVerified } = googleUser;
     const existingResult = await pool.query(
       'SELECT * FROM users WHERE google_sub = $1 OR LOWER(email) = LOWER($2) LIMIT 1',
       [sub, email]
@@ -19,12 +19,13 @@ class UserModel {
          SET google_sub = $1,
              full_name = COALESCE($2, full_name),
              avatar_url = COALESCE($3, avatar_url),
-             is_verified = is_verified OR $4,
+             avatar_key = COALESCE($4, avatar_key),
+             is_verified = is_verified OR $5,
              last_login = CURRENT_TIMESTAMP,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5
+         WHERE id = $6
          RETURNING *`,
-        [sub, name, picture, emailVerified, existing.id]
+        [sub, name, picture, pictureKey, emailVerified, existing.id]
       );
       return updated.rows[0];
     }
@@ -38,10 +39,10 @@ class UserModel {
     }
 
     const result = await pool.query(
-      `INSERT INTO users (google_sub, email, username, full_name, avatar_url, is_verified, last_login)
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+      `INSERT INTO users (google_sub, email, username, full_name, avatar_url, avatar_key, is_verified, last_login)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
        RETURNING *`,
-      [sub, email, username, name, picture, emailVerified]
+      [sub, email, username, name, picture, pictureKey, emailVerified]
     );
     return result.rows[0];
   }
@@ -80,8 +81,9 @@ class UserModel {
   // Update user profile
   static async updateProfile(id, updates) {
     const allowedFields = [
-      'full_name', 'bio', 'avatar_url', 'cover_url', 'phone',
-      'gender', 'date_of_birth', 'country', 'is_private'
+      'username', 'full_name', 'bio', 'avatar_url', 'cover_url', 'phone',
+      'gender', 'date_of_birth', 'country', 'location', 'website', 'is_private', 'is_creator',
+      'avatar_key', 'cover_key'
     ];
 
     const setClause = [];
@@ -244,7 +246,7 @@ class UserModel {
     const query = `
       WITH suggested_users AS (
         SELECT
-          u.id, u.username, u.full_name, u.avatar_url, u.is_verified,
+          u.id, u.username, u.full_name, u.bio, u.avatar_url, u.cover_url, u.is_verified, u.is_creator,
           u.followers_count,
 
           -- Score based on followers and mutual follows

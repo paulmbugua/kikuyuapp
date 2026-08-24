@@ -25,4 +25,4 @@ yarn lint
 yarn build
 ```
 
-Copy `.env.example` to `.env.local` when overriding the local API URL or configuring Firebase.
+Copy `.env.example` to `.env.local` when overriding the backend API URL. Authentication is handled by the Express Google OAuth flow.

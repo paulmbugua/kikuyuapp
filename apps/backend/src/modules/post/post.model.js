@@ -16,9 +16,9 @@ class PostModel {
       const query = `
         INSERT INTO posts (
           user_id, content, media_url, media_type, media_public_id,
-          media_width, media_height, media_duration
+          media_width, media_height, media_duration, media_provider
         )
-        VALUES ($1::UUID, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1::UUID, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `;
       
@@ -30,7 +30,8 @@ class PostModel {
         mediaData?.publicId || null,
         mediaData?.width || null,
         mediaData?.height || null,
-        mediaData?.duration || null
+        mediaData?.duration || null,
+        mediaData?.provider || (mediaData ? 'cloudinary' : null)
       ];
       
       const result = await pool.query(query, values);
@@ -106,7 +107,7 @@ class PostModel {
     const query = `
       SELECT 
         p.id, p.content, p.media_url, p.media_type, p.media_width,
-        p.media_height, p.media_duration, p.created_at, p.updated_at,
+        p.media_height, p.media_duration, p.media_public_id, p.media_provider, p.created_at, p.updated_at,
         p.likes_count, p.comments_count, p.shares_count, p.bookmarks_count,
         p.is_edited, p.is_pinned,
         

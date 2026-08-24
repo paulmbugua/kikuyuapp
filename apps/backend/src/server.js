@@ -2,7 +2,7 @@
 const app = require('./app');
 const config = require('./config/env');
 const { testConnection } = require('./config/db');
-const { ensureAuthSchema } = require('./config/databaseSetup');
+const { runMigrations } = require('./config/databaseSetup');
 const { testCloudinaryConnection } = require('./config/cloudinary');
 const { initializeSocket } = require('./socket');
 const { setupDailyJobs } = require('./cron/jobs');
@@ -16,7 +16,7 @@ const startServer = async () => {
   try {
     // Test database connection
     await testConnection();
-    await ensureAuthSchema();
+    await runMigrations();
     
     // Test Cloudinary connection
     await testCloudinaryConnection();

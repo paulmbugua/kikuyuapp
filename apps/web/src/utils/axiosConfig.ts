@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+export const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1').replace(/\/$/, '');
+export const backendOrigin = new URL(apiBaseUrl).origin;
+
 const axiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1',
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -41,7 +44,7 @@ axiosInstance.interceptors.response.use(
         }
 
         // Call refresh token endpoint
-        const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh-token`, {
+        const response = await axios.post(`${apiBaseUrl}/auth/refresh-token`, {
           refreshToken,
         });
 

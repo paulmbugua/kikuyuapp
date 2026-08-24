@@ -16,7 +16,12 @@ const requiredEnvVars = [
   'JWT_SECRET',
   'CLOUDINARY_CLOUD_NAME',
   'CLOUDINARY_API_KEY',
-  'CLOUDINARY_API_SECRET'
+  'CLOUDINARY_API_SECRET',
+  'R2_ENDPOINT',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'R2_BUCKET_IMAGES',
+  'R2_PUBLIC_BASE_URL_IMAGES'
 ];
 
 // Check for missing required variables
@@ -28,8 +33,12 @@ requiredEnvVars.forEach(envVar => {
 
 // Parse CORS origins
 const parseCorsOrigin = () => {
-  const origins = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:8080'];
-  return origins.map(origin => origin.trim());
+  const defaults = process.env.NODE_ENV === 'production'
+    ? ['https://www.thutha.co.ke', 'https://thutha.co.ke']
+    : ['http://localhost:8080', 'http://localhost:3000'];
+  const configured = process.env.CORS_ORIGIN?.split(',') || defaults;
+  if (process.env.FRONTEND_URL) configured.push(process.env.FRONTEND_URL);
+  return [...new Set(configured.map((origin) => origin.trim()).filter(Boolean))];
 };
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID_WEB;
@@ -89,9 +98,25 @@ module.exports = {
       ? process.env.GOOGLE_CALLBACK_URL
       : `${localBackendOrigin}${apiPrefix}/auth/google/callback`,
     frontendOrigin: isProduction
-      ? process.env.FRONTEND_URL
+      ? (process.env.FRONTEND_URL || 'https://www.thutha.co.ke')
       : localFrontendOrigin,
     stateTtl: '10m'
+  },
+
+  r2: {
+    endpoint: process.env.R2_ENDPOINT,
+    region: process.env.R2_REGION || 'auto',
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    buckets: {
+      images: process.env.R2_BUCKET_IMAGES,
+      videos: process.env.R2_BUCKET_VIDEOS
+    },
+    publicBaseUrls: {
+      images: process.env.R2_PUBLIC_BASE_URL_IMAGES,
+      previews: process.env.R2_PUBLIC_BASE_URL_PREVIEWS
+    },
+    maxImageBytes: parseInt(process.env.R2_MAX_IMAGE_BYTES) || 10 * 1024 * 1024
   },
 
   cloudinary: {

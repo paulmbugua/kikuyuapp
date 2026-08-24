@@ -9,6 +9,7 @@ const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
 const pool = require('../../config/db');
 const config = require('../../config/env');
+const { mirrorImage } = require('../../config/r2');
 const {
   STATE_COOKIE,
   createState,
@@ -24,6 +25,17 @@ const safeJson = (value) => JSON.stringify(value)
   .replace(/>/g, '\\u003e')
   .replace(/&/g, '\\u0026');
 
+const prepareGoogleProfileImage = async (profile) => {
+  if (!profile.picture) return profile;
+  const existing = await UserModel.findByEmail(profile.email);
+  const cloudflareBase = config.r2.publicBaseUrls.images.replace(/\/$/, '');
+  if (existing?.avatar_url?.startsWith(`${cloudflareBase}/`)) {
+    return { ...profile, picture: existing.avatar_url, pictureKey: existing.avatar_key };
+  }
+
+  const mirrored = await mirrorImage(profile.picture, 'users/google-avatars');
+  return { ...profile, picture: mirrored.url, pictureKey: mirrored.publicId };
+};
 const sendOAuthPopupResponse = (res, payload) => {
   const nonce = crypto.randomBytes(18).toString('base64');
   const message = safeJson(payload);
@@ -82,7 +94,8 @@ const googleCallback = async (req, res) => {
     }
 
     const googleProfile = await exchangeCodeForProfile(code);
-    const user = await UserModel.findOrCreateFromGoogle(googleProfile);
+    const preparedProfile = await prepareGoogleProfileImage(googleProfile);
+    const user = await UserModel.findOrCreateFromGoogle(preparedProfile);
     const tokens = generateTokenPair({ id: user.id, email: user.email, role: 'user', isStaff: false });
     delete user.google_sub;
 

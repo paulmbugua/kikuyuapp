@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from '@/lib/navigation';
 import { Search, Mic, Users, Radio, X, UserPlus, UserCheck, Hash, TrendingUp, Clock, Hand, DollarSign, Volume2, VolumeX, MicOff, Plus, Globe, Lock, Loader2, LogOut, Crown, CheckCircle } from 'lucide-react';
-import { formatNumber } from '@/data/dummy';
+import { formatNumber } from '@/utils/format';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import PostCard from '@/components/feed/PostCard';
 import SupportTokenButton from '@/components/feed/SupportTokenButton';
 import { useUserStore } from '@/stores/userStore';
 import { toast } from 'sonner';
-import axiosInstance from '@/utils/axiosConfig';
+import axiosInstance, { backendOrigin } from '@/utils/axiosConfig';
+import { io, type Socket } from 'socket.io-client';
 
 interface VoiceSpace {
   id: string;
@@ -87,7 +88,7 @@ const Rugano = () => {
   const [muted, setMuted] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+  const [wsConnection, setWsConnection] = useState<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [participants, setParticipants] = useState<any[]>([]);
 
@@ -104,7 +105,7 @@ const Rugano = () => {
     }
     return () => {
       if (wsConnection) {
-        wsConnection.close();
+        wsConnection.disconnect();
       }
     };
   }, [activeSpace]);
@@ -139,8 +140,14 @@ const Rugano = () => {
 
   const fetchTrendingTopics = async () => {
     try {
-      const response = await axiosInstance.get('/trending/topics');
-      setTrendingTopics(response.data.data.topics || []);
+      const response = await axiosInstance.get('/posts/hashtags/trending?limit=20');
+      const hashtags = response.data.data?.hashtags || [];
+      setTrendingTopics(hashtags.map((item: { name: string; posts_count: number }) => ({
+        id: item.name,
+        tag: `#${item.name}`,
+        posts: Number(item.posts_count),
+        category: 'Community'
+      })));
     } catch (error) {
       console.error('Error fetching trending topics:', error);
     }
@@ -175,22 +182,20 @@ const Rugano = () => {
 
   const connectWebSocket = (spaceId: string) => {
     const token = localStorage.getItem('accessToken');
-    const ws = new WebSocket(`ws://localhost:5000?token=${token}`);
-    
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      ws.send(JSON.stringify({ 
-        type: 'voice-space:join', 
+    const socket = io(backendOrigin, {
+      auth: { token },
+      transports: ['websocket', 'polling']
+    });
+
+    socket.on('connect', () => {
+      socket.emit('voice-space:join', {
         spaceId,
         role: activeSpace?.participant_role || 'listener'
-      }));
-    };
-    
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log('WebSocket message:', data);
-      
-      switch (data.type) {
+      });
+    });
+
+    socket.onAny((eventType, data) => {
+      switch (eventType) {
         case 'voice-space:participants':
           setParticipants(data.participants);
           setActiveSpace(prev => prev ? { ...prev, participants: data.participants } : prev);
@@ -198,79 +203,40 @@ const Rugano = () => {
         case 'voice-space:user-joined':
           toast.success(`${data.username} joined the space`);
           setParticipants(prev => [...prev, data]);
-          setActiveSpace(prev => prev ? { 
-            ...prev, 
-            participants: [...(prev.participants || []), data],
-            listener_count: (prev.listener_count || 0) + 1
-          } : prev);
+          setActiveSpace(prev => prev ? { ...prev, participants: [...(prev.participants || []), data], listener_count: (prev.listener_count || 0) + 1 } : prev);
           break;
         case 'voice-space:user-left':
           toast.info(`${data.username} left the space`);
           setParticipants(prev => prev.filter(p => p.userId !== data.userId));
-          setActiveSpace(prev => prev ? {
-            ...prev,
-            participants: (prev.participants || []).filter(p => p.id !== data.userId),
-            listener_count: (prev.listener_count || 0) - 1
-          } : prev);
+          setActiveSpace(prev => prev ? { ...prev, participants: (prev.participants || []).filter(p => p.id !== data.userId), listener_count: Math.max(0, (prev.listener_count || 0) - 1) } : prev);
           break;
         case 'voice-space:hand-raised':
           toast.info(`${data.username} raised their hand`);
-          setParticipants(prev => prev.map(p => 
-            p.userId === data.userId ? { ...p, hasHandRaised: true } : p
-          ));
-          setActiveSpace(prev => prev ? {
-            ...prev,
-            participants: (prev.participants || []).map(p => 
-              p.id === data.userId ? { ...p, has_hand_raised: true } : p
-            )
-          } : prev);
+          setParticipants(prev => prev.map(p => p.userId === data.userId ? { ...p, hasHandRaised: true } : p));
+          setActiveSpace(prev => prev ? { ...prev, participants: (prev.participants || []).map(p => p.id === data.userId ? { ...p, has_hand_raised: true } : p) } : prev);
           break;
         case 'voice-space:hand-lowered':
-          setParticipants(prev => prev.map(p => 
-            p.userId === data.userId ? { ...p, hasHandRaised: false } : p
-          ));
-          setActiveSpace(prev => prev ? {
-            ...prev,
-            participants: (prev.participants || []).map(p => 
-              p.id === data.userId ? { ...p, has_hand_raised: false } : p
-            )
-          } : prev);
+          setParticipants(prev => prev.map(p => p.userId === data.userId ? { ...p, hasHandRaised: false } : p));
+          setActiveSpace(prev => prev ? { ...prev, participants: (prev.participants || []).map(p => p.id === data.userId ? { ...p, has_hand_raised: false } : p) } : prev);
           break;
         case 'voice-space:speaker-approved':
           toast.success(`${data.username} is now a speaker`);
-          setParticipants(prev => prev.map(p => 
-            p.userId === data.userId ? { ...p, role: 'speaker', hasHandRaised: false } : p
-          ));
-          setActiveSpace(prev => prev ? {
-            ...prev,
-            participants: (prev.participants || []).map(p => 
-              p.id === data.userId ? { ...p, role: 'speaker', has_hand_raised: false } : p
-            )
-          } : prev);
+          setParticipants(prev => prev.map(p => p.userId === data.userId ? { ...p, role: 'speaker', hasHandRaised: false } : p));
+          setActiveSpace(prev => prev ? { ...prev, participants: (prev.participants || []).map(p => p.id === data.userId ? { ...p, role: 'speaker', has_hand_raised: false } : p) } : prev);
           break;
         case 'voice-space:become-speaker':
           toast.success('You are now a speaker!');
           setHandRaised(false);
           break;
         case 'voice-space:new-message':
-          setMessages(prev => [...prev, {
-            id: data.id,
-            userId: data.userId,
-            username: data.username,
-            full_name: data.fullName,
-            avatar_url: data.avatarUrl,
-            message: data.message,
-            createdAt: data.createdAt
-          }]);
+          setMessages(prev => [...prev, { id: data.id, userId: data.userId, username: data.username, full_name: data.fullName, avatar_url: data.avatarUrl, message: data.message, createdAt: data.createdAt }]);
           break;
         case 'voice-space:muted':
           if (data.userId === user?.id) {
             setMuted(data.isMuted);
             toast.info(data.isMuted ? 'You have been muted' : 'You have been unmuted');
           }
-          setParticipants(prev => prev.map(p => 
-            p.userId === data.userId ? { ...p, isMuted: data.isMuted } : p
-          ));
+          setParticipants(prev => prev.map(p => p.userId === data.userId ? { ...p, isMuted: data.isMuted } : p));
           break;
         case 'voice-space:user-removed':
           if (data.userId === user?.id) {
@@ -278,24 +244,19 @@ const Rugano = () => {
             setActiveSpace(null);
             setIsHosting(false);
           } else {
-            toast.info(`User was removed from the space`);
+            toast.info('User was removed from the space');
           }
           break;
       }
-    };
-    
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      toast.error('Connection error. Please refresh the page.');
-    };
-    
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
-    
-    setWsConnection(ws);
-  };
+    });
 
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+      toast.error('Connection error. Please refresh the page.');
+    });
+
+    setWsConnection(socket);
+  };
   const fetchSpaceDetails = async (spaceId: string) => {
     try {
       const response = await axiosInstance.get(`/rugano/${spaceId}`);
@@ -351,11 +312,8 @@ const Rugano = () => {
     try {
       await axiosInstance.post(`/rugano/${activeSpace.id}/leave`);
       if (wsConnection) {
-        wsConnection.send(JSON.stringify({ 
-          type: 'voice-space:leave', 
-          spaceId: activeSpace.id 
-        }));
-        wsConnection.close();
+        wsConnection.emit('voice-space:leave', { spaceId: activeSpace.id });
+        wsConnection.disconnect();
       }
       setActiveSpace(null);
       setIsHosting(false);
@@ -375,11 +333,8 @@ const Rugano = () => {
     try {
       await axiosInstance.post(`/rugano/${activeSpace.id}/end`);
       if (wsConnection) {
-        wsConnection.send(JSON.stringify({ 
-          type: 'voice-space:leave', 
-          spaceId: activeSpace.id 
-        }));
-        wsConnection.close();
+        wsConnection.emit('voice-space:leave', { spaceId: activeSpace.id });
+        wsConnection.disconnect();
       }
       setActiveSpace(null);
       setIsHosting(false);
@@ -397,20 +352,14 @@ const Rugano = () => {
       if (handRaised) {
         await axiosInstance.post(`/rugano/${activeSpace.id}/lower-hand`);
         if (wsConnection) {
-          wsConnection.send(JSON.stringify({ 
-            type: 'voice-space:lower-hand', 
-            spaceId: activeSpace.id 
-          }));
+          wsConnection.emit('voice-space:lower-hand', { spaceId: activeSpace.id });
         }
         setHandRaised(false);
         toast.success('Hand lowered');
       } else {
         await axiosInstance.post(`/rugano/${activeSpace.id}/raise-hand`);
         if (wsConnection) {
-          wsConnection.send(JSON.stringify({ 
-            type: 'voice-space:raise-hand', 
-            spaceId: activeSpace.id 
-          }));
+          wsConnection.emit('voice-space:raise-hand', { spaceId: activeSpace.id });
         }
         setHandRaised(true);
         toast.success('Hand raised! Host has been notified');
@@ -446,11 +395,7 @@ const Rugano = () => {
     try {
       await axiosInstance.post(`/rugano/${activeSpace.id}/approve-speaker/${targetUserId}`);
       if (wsConnection) {
-        wsConnection.send(JSON.stringify({ 
-          type: 'voice-space:approve-speaker', 
-          spaceId: activeSpace.id,
-          targetUserId
-        }));
+        wsConnection.emit('voice-space:approve-speaker', { spaceId: activeSpace.id, targetUserId });
       }
       toast.success('Speaker approved');
     } catch (error) {

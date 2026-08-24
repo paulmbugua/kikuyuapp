@@ -11,10 +11,10 @@ Thutha is a modern social home for Agĩkũyũ stories, creators, conversations, 
 
 ## Requirements
 
-- Node.js 20.9 or newer
+- Node.js 22 or newer
 - Corepack enabled
 - PostgreSQL
-- Firebase Admin and Cloudinary credentials for the backend
+- Google OAuth, Cloudflare R2 image storage, and Cloudinary video credentials for the backend
 
 ## Install once
 
