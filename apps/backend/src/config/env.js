@@ -32,7 +32,7 @@ const parseCorsOrigin = () => {
   return origins.map(origin => origin.trim());
 };
 
-const googleClientId = process.env.GOOGLE_CLIENT_ID_WEB || process.env.GOOGLE_CLIENT_ID;
+const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID_WEB;
 if (!googleClientId) {
   throw new Error('❌ Missing required environment variable: GOOGLE_CLIENT_ID_WEB or GOOGLE_CLIENT_ID');
 }
