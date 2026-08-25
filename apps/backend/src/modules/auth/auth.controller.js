@@ -9,6 +9,8 @@ const catchAsync = require('../../utils/catchAsync');
 const ResponseHandler = require('../../utils/responseHandler');
 const pool = require('../../config/db');
 const config = require('../../config/env');
+const nodemailer = require('nodemailer');
+const { hashPassword, comparePassword } = require('../../utils/passwordUtils');
 const {
   STATE_COOKIE,
   createState,
@@ -101,6 +103,88 @@ const googleCallback = async (req, res) => {
     }, frontendOrigin);
   }
 };
+
+const mailTransport = () => {
+  if (!config.mail.host || !config.mail.user || !config.mail.pass) throw new AppError('Email service is not configured', 503);
+  return nodemailer.createTransport({ host: config.mail.host, port: config.mail.port, secure: config.mail.secure, auth: { user: config.mail.user, pass: config.mail.pass } });
+};
+
+const sendMail = (message) => mailTransport().sendMail({ from: config.mail.from, replyTo: config.mail.replyTo, ...message });
+
+const publicUser = (user) => {
+  const safe = { ...user };
+  delete safe.password_hash;
+  delete safe.password_reset_token_hash;
+  delete safe.password_reset_expires_at;
+  delete safe.google_sub;
+  return safe;
+};
+
+const createLocalUsername = async (email, requested) => {
+  const base = (requested || email.split('@')[0]).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 28) || 'member';
+  let username = base;
+  let counter = 1;
+  while (await UserModel.usernameExists(username)) username = base + counter++;
+  return username;
+};
+
+const localRegister = catchAsync(async (req, res) => {
+  const { email, password, confirmPassword, fullName, username } = req.body;
+  if (!email || !password || !confirmPassword) throw new AppError('Email, password and confirmation are required', 400);
+  if (password !== confirmPassword) throw new AppError('Passwords do not match', 400);
+  const validation = validatePasswordStrength(password);
+  if (!validation.isValid) throw new AppError(validation.errors.join('. '), 400);
+  const normalizedEmail = email.trim().toLowerCase();
+  if (await UserModel.findByEmail(normalizedEmail)) throw new AppError('An account with this email already exists', 409);
+  const userUsername = await createLocalUsername(normalizedEmail, username);
+  const passwordHash = await hashPassword(password);
+  const result = await pool.query(
+    `INSERT INTO users (email, username, full_name, password_hash, is_verified, last_login)
+     VALUES ($1, $2, $3, $4, false, CURRENT_TIMESTAMP) RETURNING *`,
+    [normalizedEmail, userUsername, (fullName || userUsername).trim(), passwordHash]
+  );
+  const user = result.rows[0];
+  const tokens = generateTokenPair({ id: user.id, email: user.email, role: 'user', isStaff: false });
+  ResponseHandler.success(res, { user: publicUser(user), tokens }, 'Account created successfully', 201);
+});
+
+const localLogin = catchAsync(async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) throw new AppError('Email and password are required', 400);
+  const user = await UserModel.findByEmail(email.trim().toLowerCase());
+  if (!user?.password_hash || !(await comparePassword(password, user.password_hash))) throw new AppError('Invalid email or password', 401);
+  await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+  const tokens = generateTokenPair({ id: user.id, email: user.email, role: 'user', isStaff: false });
+  ResponseHandler.success(res, { user: publicUser(user), tokens }, 'Login successful');
+});
+
+const requestPasswordReset = catchAsync(async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!email) throw new AppError('Email is required', 400);
+  const user = await UserModel.findByEmail(email);
+  if (user) {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    await pool.query('UPDATE users SET password_reset_token_hash = $1, password_reset_expires_at = NOW() + INTERVAL \'30 minutes\' WHERE id = $2', [tokenHash, user.id]);
+    const resetUrl = config.googleOAuth.frontendOrigin + '/reset-password?token=' + rawToken + '&email=' + encodeURIComponent(email);
+    await sendMail({ to: email, subject: 'Reset your Thutha password', html: '<h2>Reset your Thutha password</h2><p>Use the button below within 30 minutes to choose a new password.</p><p><a href="' + resetUrl + '">Reset password</a></p><p>If you did not request this, you can ignore this email.</p>' });
+  }
+  ResponseHandler.success(res, null, 'If an account exists for that email, a reset link has been sent');
+});
+
+const resetPassword = catchAsync(async (req, res) => {
+  const { email, token, password, confirmPassword } = req.body;
+  if (!email || !token || !password || !confirmPassword) throw new AppError('All fields are required', 400);
+  if (password !== confirmPassword) throw new AppError('Passwords do not match', 400);
+  const validation = validatePasswordStrength(password);
+  if (!validation.isValid) throw new AppError(validation.errors.join('. '), 400);
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const result = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND password_reset_token_hash = $2 AND password_reset_expires_at > NOW() LIMIT 1', [email.trim(), tokenHash]);
+  if (!result.rows[0]) throw new AppError('This reset link is invalid or expired', 400);
+  const passwordHash = await hashPassword(password);
+  await pool.query('UPDATE users SET password_hash = $1, password_reset_token_hash = NULL, password_reset_expires_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [passwordHash, result.rows[0].id]);
+  ResponseHandler.success(res, null, 'Password reset successfully');
+});
 
 // Staff Login (email + password)
 const staffLogin = catchAsync(async (req, res) => {
@@ -263,6 +347,10 @@ const getMe = catchAsync(async (req, res) => {
 module.exports = {
   googleLogin,
   googleCallback,
+  localRegister,
+  localLogin,
+  requestPasswordReset,
+  resetPassword,
   staffLogin,
   refreshToken,
   logout,

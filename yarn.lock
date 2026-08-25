@@ -2375,6 +2375,7 @@ __metadata:
     morgan: "npm:^1.10.1"
     multer: "npm:^2.1.1"
     node-cron: "npm:^4.2.1"
+    nodemailer: "npm:^9.0.5"
     nodemon: "npm:^3.1.14"
     pg: "npm:^8.20.0"
     socket.io: "npm:^4.8.3"
@@ -9353,6 +9354,13 @@ __metadata:
   version: 2.0.53
   resolution: "node-releases@npm:2.0.53"
   checksum: 10c0/db9fb29b21ec12e223ead8bd9406100ff14fce01678a9a4865e288098456b84869431421a739f216aa520b6f57d9425f6537662501ae8a2d9e1771bfa87751bc
+  languageName: node
+  linkType: hard
+
+"nodemailer@npm:^9.0.5":
+  version: 9.0.5
+  resolution: "nodemailer@npm:9.0.5"
+  checksum: 10c0/60f7a21497c98c0d275cd12c488af581ef6aee65db575026319ac249dcac210bdab20edf77fe3158176ed3910f70d8c46d89abcd74f57a7170302727e6d05ee3
   languageName: node
   linkType: hard
 

@@ -13,6 +13,7 @@ import PublicRoute from "@/components/PublicRoute";
 import AppLayout from "@/components/layout/AppLayout";
 import Splash from "@/screens/Splash";
 import Login from "@/screens/Login";
+import ResetPassword from "@/screens/ResetPassword";
 import Feed from "@/screens/Feed";
 import Trending from "@/screens/Trending";
 import Create from "@/screens/Create";
@@ -53,6 +54,7 @@ function RouteCanvas() {
   const { pathname } = useLocation();
 
   if (pathname === "/") return <Splash />;
+  if (pathname === "/reset-password") return <ResetPassword />;
   if (pathname === "/login") {
     return (
       <PublicRoute>

@@ -15,6 +15,10 @@ const {
 router.get('/google', authLimiter, authController.googleLogin);
 router.get('/google/callback', authController.googleCallback);
 router.post('/staff/login', authLimiter, validateStaffLogin, validate, authController.staffLogin);
+router.post('/register', authLimiter, authController.localRegister);
+router.post('/login', authLimiter, authController.localLogin);
+router.post('/forgot-password', authLimiter, authController.requestPasswordReset);
+router.post('/reset-password', authLimiter, authController.resetPassword);
 router.post('/refresh-token', authLimiter, validateRefreshToken, validate, authController.refreshToken);
 router.post('/logout', authLimiter, authController.logout);
 router.get('/verify-email/:token', authController.verifyEmail);

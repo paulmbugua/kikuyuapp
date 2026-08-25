@@ -181,6 +181,16 @@ module.exports = {
     rounds: parseInt(process.env.BCRYPT_ROUNDS) || 12
   },
 
+  mail: {
+    host: process.env.SMTP_HOST || '',
+    port: parseInt(process.env.SMTP_PORT) || 465,
+    secure: String(process.env.SMTP_SECURE).toLowerCase() === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.MAIL_FROM || (process.env.MAIL_FROM_NAME && process.env.MAIL_FROM_ADDRESS ? process.env.MAIL_FROM_NAME + ' <' + process.env.MAIL_FROM_ADDRESS + '>' : process.env.MAIL_FROM_ADDRESS || ''),
+    replyTo: process.env.MAIL_REPLY_TO || process.env.SMTP_USER || ''
+  },
+
   logging: {
     level: process.env.LOG_LEVEL || 'info',
     filePath: process.env.LOG_FILE_PATH || 'logs/app.log'
