@@ -4,7 +4,7 @@ services:
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped
-    env_file: .env
+    env_file: ../../.env
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -29,14 +29,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-    env_file: .env
+    env_file: ../../.env
 
   backend:
     build:
       context: ../..
       dockerfile: deploy/docker/backend.Dockerfile
     restart: unless-stopped
-    env_file: .env
+    env_file: ../../.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,7 +77,7 @@ services:
   backup:
     image: postgres:18-alpine
     restart: unless-stopped
-    env_file: .env
+    env_file: ../../.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,7 +90,7 @@ services:
     profiles: ["edge"]
     image: cloudflare/cloudflared:2026.10.0
     restart: unless-stopped
-    env_file: .env
+    env_file: ../../.env
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       web:
