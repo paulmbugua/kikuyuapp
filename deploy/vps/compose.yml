@@ -105,3 +105,9 @@ volumes:
   backend-logs:
   backup-data:
 
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.254.254.0/24
+
