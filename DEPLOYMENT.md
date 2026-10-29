@@ -31,3 +31,13 @@ Production URL values:
 - `GOOGLE_CALLBACK_URL=https://server.thutha.co.ke/api/v1/auth/google/callback`
 
 `FRONTEND_URL` and `CORS_ORIGIN` accept comma-separated origins. The first `FRONTEND_URL` is the default OAuth return origin; the signed OAuth state preserves whichever allowed domain initiated login. `WEB_BACKEND_URL` is the backend's self URL and does not control the listening port; Railway's injected `PORT` remains authoritative.
+
+## HostPinnacle VPS
+
+The VPS deployment assets are in `deploy/vps` and `deploy/docker`.
+
+- `compose.yml` runs PostgreSQL, Redis, the backend, the web app, and an encrypted daily PostgreSQL backup worker.
+- Application services are internal-only; the optional `edge` profile runs Cloudflare Tunnel without publishing application or database ports.
+- Copy `deploy/vps/.env.example` to the VPS as `/opt/kikuyuapp/.env`, populate it from the existing production variables, and keep it out of Git.
+- The repository currently contains no separate admin frontend. The backend exposes authenticated admin API routes, but an `admin` hostname cannot be routed to a real admin app until that frontend is supplied.
+- Before DNS cutover, take a snapshot of current DNS/hosting records and verify MX, SPF, DKIM, DMARC, and verification records remain unchanged.

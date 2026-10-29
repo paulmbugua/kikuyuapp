@@ -1,0 +1,14 @@
+.git
+.yarn/cache
+node_modules
+apps/*/node_modules
+apps/*/.next
+apps/*/.open-next
+apps/*/.wrangler
+apps/*/.env
+apps/*/.env.local
+apps/*/uploads
+logs
+work
+outputs
+
