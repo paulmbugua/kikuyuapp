@@ -91,9 +91,12 @@ services:
   cloudflared:
     profiles: ["edge"]
     image: cloudflare/cloudflared:2026.10.0
+    user: "0:0"
     restart: unless-stopped
-    env_file: ../../.env
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --config /etc/cloudflared/config.yml --no-autoupdate run
+    volumes:
+      - ../../runtime/cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+      - ../../runtime/cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
     depends_on:
       web:
         condition: service_healthy

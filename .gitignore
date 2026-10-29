@@ -16,6 +16,7 @@ coverage/
 .env.*.local
 !.env.example
 logs/
+runtime/
 *.log
 apps/backend/uploads/
 .DS_Store
